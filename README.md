@@ -1,8 +1,13 @@
 # CodeMirror 6 Language Server Protocol (LSP) Plugin
 
-[![npm version](https://badge.fury.io/js/@marimo-team/codemirror-languageserver.svg)](https://www.npmjs.com/package/@marimo-team/codemirror-languageserver)
+[![npm version](https://img.shields.io/npm/v/@marimo-team/codemirror-languageserver.svg)](https://www.npmjs.com/package/@marimo-team/codemirror-languageserver)
+[![npm downloads](https://img.shields.io/npm/dm/@marimo-team/codemirror-languageserver.svg)](https://www.npmjs.com/package/@marimo-team/codemirror-languageserver)
+[![License](https://img.shields.io/npm/l/@marimo-team/codemirror-languageserver.svg)](https://github.com/marimo-team/codemirror-languageserver/blob/main/LICENSE)
+[![CI](https://github.com/marimo-team/codemirror-languageserver/actions/workflows/test.yml/badge.svg)](https://github.com/marimo-team/codemirror-languageserver/actions/workflows/test.yml)
 
 A powerful LSP client plugin for CodeMirror 6 that brings IDE-like features to your editor.
+
+> This is a fork of [FurqanSoftware/codemirror-languageserver](https://github.com/FurqanSoftware/codemirror-languageserver) with additional features and modernization.
 
 ## Features
 
