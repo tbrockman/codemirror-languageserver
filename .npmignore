@@ -1,6 +1,0 @@
-src/*
-.git*
-.babelrc.json
-rollup.config.js
-
-*.sublime-*
