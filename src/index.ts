@@ -24,7 +24,7 @@ import type {
     CompletionResult,
 } from "@codemirror/autocomplete";
 import type { PluginValue, ViewUpdate } from "@codemirror/view";
-import type { Transport } from "@open-rpc/client-js/build/transports/Transport";
+import type { Transport } from "@open-rpc/client-js/build/transports/Transport.js";
 import type { PublishDiagnosticsParams } from "vscode-languageserver-protocol";
 import type * as LSP from "vscode-languageserver-protocol";
 import {
@@ -32,9 +32,10 @@ import {
     isLSPTextEdit,
     offsetToPos,
     posToOffset,
+    posToOffsetOrZero,
     prefixMatch,
     showErrorMessage,
-} from "./utils";
+} from "./utils.js";
 
 const timeout = 10000;
 const changesDelay = 500;
@@ -43,7 +44,8 @@ const CompletionItemKindMap = Object.fromEntries(
     Object.entries(CompletionItemKind).map(([key, value]) => [value, key]),
 ) as Record<CompletionItemKind, string>;
 
-const useLast = <T>(values: T[]) => values.at(-1);
+// biome-ignore lint/style/noNonNullAssertion: <explanation>
+const useLast = <T>(values: readonly T[]): T => values.at(-1)!;
 
 const client = Facet.define<LanguageServerClient, LanguageServerClient>({
     combine: useLast,
@@ -104,7 +106,7 @@ export class LanguageServerClient {
 
     public initializePromise: Promise<void>;
     private rootUri: string;
-    private workspaceFolders: LSP.WorkspaceFolder[];
+    private workspaceFolders: LSP.WorkspaceFolder[] | null;
     private autoClose?: boolean;
 
     private transport: Transport;
@@ -128,8 +130,8 @@ export class LanguageServerClient {
         this.requestManager = new RequestManager([this.transport]);
         this.client = new Client(this.requestManager);
 
-        this.client.onNotification((data: Notification) => {
-            this.processNotification(data);
+        this.client.onNotification((data) => {
+            this.processNotification(data as Notification);
         });
 
         const webSocketTransport = this.transport as WebSocketTransport;
@@ -444,7 +446,7 @@ class LanguageServerPlugin implements PluginValue {
             pos = posToOffset(view.state.doc, range.start);
             end = posToOffset(view.state.doc, range.end);
         }
-        if (pos === null) {
+        if (pos == null) {
             return null;
         }
         const dom = document.createElement("div");
@@ -499,6 +501,9 @@ class LanguageServerPlugin implements PluginValue {
         let items = "items" in result ? result.items : result;
 
         const [_span, match] = prefixMatch(items);
+        if (!match) {
+            return null;
+        }
         const token = context.matchBefore(match);
         let { pos } = context;
 
@@ -548,16 +553,19 @@ class LanguageServerPlugin implements PluginValue {
                     from: number,
                     to: number,
                 ) {
-                    if (isLSPTextEdit(textEdit)) {
+                    if (textEdit && isLSPTextEdit(textEdit)) {
                         view.dispatch(
                             insertCompletionText(
                                 view.state,
                                 textEdit.newText,
-                                posToOffset(
+                                posToOffsetOrZero(
                                     view.state.doc,
                                     textEdit.range.start,
                                 ),
-                                posToOffset(view.state.doc, textEdit.range.end),
+                                posToOffsetOrZero(
+                                    view.state.doc,
+                                    textEdit.range.end,
+                                ),
                             ),
                         );
                     } else {
@@ -577,14 +585,14 @@ class LanguageServerPlugin implements PluginValue {
                     const sortedEdits = additionalTextEdits.sort(
                         ({ range: { end: a } }, { range: { end: b } }) => {
                             if (
-                                posToOffset(view.state.doc, a) <
-                                posToOffset(view.state.doc, b)
+                                posToOffsetOrZero(view.state.doc, a) <
+                                posToOffsetOrZero(view.state.doc, b)
                             ) {
                                 return 1;
                             }
                             if (
-                                posToOffset(view.state.doc, a) >
-                                posToOffset(view.state.doc, b)
+                                posToOffsetOrZero(view.state.doc, a) >
+                                posToOffsetOrZero(view.state.doc, b)
                             ) {
                                 return -1;
                             }
@@ -595,7 +603,7 @@ class LanguageServerPlugin implements PluginValue {
                         view.dispatch(
                             view.state.update({
                                 changes: {
-                                    from: posToOffset(
+                                    from: posToOffsetOrZero(
                                         view.state.doc,
                                         textEdit.range.start,
                                     ),
@@ -689,6 +697,7 @@ class LanguageServerPlugin implements PluginValue {
 
         // For now just handle the first location
         const location = locations[0];
+        if (!location) return;
         const uri = "uri" in location ? location.uri : location.targetUri;
         const range =
             "range" in location ? location.range : location.targetRange;
@@ -705,7 +714,7 @@ class LanguageServerPlugin implements PluginValue {
         this.view.dispatch(
             this.view.state.update({
                 selection: {
-                    anchor: posToOffset(this.view.state.doc, range.start),
+                    anchor: posToOffsetOrZero(this.view.state.doc, range.start),
                     head: posToOffset(this.view.state.doc, range.end),
                 },
             }),
@@ -736,8 +745,8 @@ class LanguageServerPlugin implements PluginValue {
                     code as string,
                 ]);
                 return {
-                    from: posToOffset(this.view.state.doc, range.start),
-                    to: posToOffset(this.view.state.doc, range.end),
+                    from: posToOffsetOrZero(this.view.state.doc, range.start),
+                    to: posToOffsetOrZero(this.view.state.doc, range.end),
                     severity: (
                         {
                             [DiagnosticSeverity.Error]: "error",
@@ -763,7 +772,7 @@ class LanguageServerPlugin implements PluginValue {
                                         this.view.dispatch(
                                             this.view.state.update({
                                                 changes: {
-                                                    from: posToOffset(
+                                                    from: posToOffsetOrZero(
                                                         this.view.state.doc,
                                                         change.range.start,
                                                     ),
@@ -864,6 +873,9 @@ class LanguageServerPlugin implements PluginValue {
             const range =
                 "range" in prepareResult ? prepareResult.range : prepareResult;
             const from = posToOffset(view.state.doc, range.start);
+            if (from == null) {
+                return;
+            }
             const to = posToOffset(view.state.doc, range.end);
             input.value = view.state.doc.sliceString(from, to);
 
@@ -1070,7 +1082,7 @@ export function languageServerWithTransport(options: LanguageServerOptions) {
                     if (
                         !explicit &&
                         plugin.client.capabilities?.completionProvider?.triggerCharacters?.includes(
-                            line.text[pos - line.from - 1],
+                            line.text[pos - line.from - 1] || "",
                         )
                     ) {
                         trigKind = CompletionTriggerKind.TriggerCharacter;

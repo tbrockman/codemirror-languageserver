@@ -17,6 +17,13 @@ export function posToOffset(
     return offset;
 }
 
+export function posToOffsetOrZero(
+    doc: Text,
+    pos: { line: number; character: number },
+): number {
+    return posToOffset(doc, pos) || 0;
+}
+
 export function offsetToPos(doc: Text, offset: number) {
     const line = doc.lineAt(offset);
     return {
@@ -26,8 +33,15 @@ export function offsetToPos(doc: Text, offset: number) {
 }
 
 export function formatContents(
-    contents: LSP.MarkupContent | LSP.MarkedString | LSP.MarkedString[],
+    contents:
+        | LSP.MarkupContent
+        | LSP.MarkedString
+        | LSP.MarkedString[]
+        | undefined,
 ): string {
+    if (!contents) {
+        return "";
+    }
     if (isLSPMarkupContent(contents)) {
         let value = contents.value;
         if (contents.kind === "markdown") {
@@ -61,7 +75,9 @@ export function prefixMatch(items: LSP.CompletionItem[]) {
 
     for (const item of items) {
         const [initial, ...restStr] = item.textEdit?.newText || item.label;
-        first.add(initial);
+        if (initial) {
+            first.add(initial);
+        }
         for (const char of restStr) {
             rest.add(char);
         }

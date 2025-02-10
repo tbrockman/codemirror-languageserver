@@ -3,18 +3,31 @@
   "publishConfig": {
     "access": "public"
   },
+  "sideEffects": false,
   "version": "1.13.2",
   "description": "Language Server Plugin for CodeMirror 6",
-  "main": "dist/index.js",
   "files": [
     "dist"
   ],
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
   "scripts": {
     "prepare": "tsc",
     "dev": "vite",
     "build": "tsc",
     "build:demo": "vite build",
     "lint": "biome check --write",
+    "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "test": "vitest"
   },
