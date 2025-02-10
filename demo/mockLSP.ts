@@ -78,7 +78,7 @@ export class MockLSPServer {
     }
 
     public async completion(
-        params: LSP.CompletionParams,
+        _params: LSP.CompletionParams,
     ): Promise<LSP.CompletionList> {
         // Mock completions
         return {
@@ -217,7 +217,7 @@ export class MockLSPServer {
         return resolvedItem;
     }
 
-    public async hover(params: LSP.HoverParams): Promise<LSP.Hover> {
+    public async hover(_params: LSP.HoverParams): Promise<LSP.Hover> {
         return {
             contents: {
                 kind: "markdown",
@@ -253,7 +253,7 @@ export class MockLSPServer {
         const beforeMatch = lineUpToCursor.match(/\w*$/);
         const afterMatch = lineAfterCursor.match(/^\w*/);
 
-        if (!beforeMatch || !afterMatch) {
+        if (!(beforeMatch && afterMatch)) {
             throw new Error("No valid symbol at position");
         }
 
@@ -298,8 +298,10 @@ export class MockLSPServer {
                         : "";
 
                 if (
-                    (!beforeChar || !/\w/.test(beforeChar)) &&
-                    (!afterChar || !/\w/.test(afterChar))
+                    !(
+                        (beforeChar && /\w/.test(beforeChar)) ||
+                        (afterChar && /\w/.test(afterChar))
+                    )
                 ) {
                     changes.push({
                         range: {

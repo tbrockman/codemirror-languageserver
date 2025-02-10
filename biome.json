@@ -13,8 +13,45 @@
         "attributePosition": "auto",
         "bracketSpacing": true
     },
-    "organizeImports": { "enabled": true },
-    "linter": { "enabled": true, "rules": { "recommended": true } },
+    "organizeImports": {
+        "enabled": true
+    },
+    "linter": {
+        "enabled": true,
+        "rules": {
+            "recommended": true,
+            "complexity": {
+                "noForEach": "error",
+                "useSimplifiedLogicExpression": "error",
+                "noStaticOnlyClass": "error",
+                "noUselessFragments": "error",
+                "noBannedTypes": "error"
+            },
+            "correctness": {
+                "noUnreachable": "error",
+                "noUnusedVariables": "error",
+                "useExhaustiveDependencies": "error",
+                "noConstantCondition": "error"
+            },
+            "performance": {
+                "noDelete": "error"
+            },
+            "style": {
+                "noNonNullAssertion": "error",
+                "useConst": "error",
+                "useEnumInitializers": "error",
+                "useImportType": "error",
+                "useSelfClosingElements": "error"
+            },
+            "suspicious": {
+                "noConsoleLog": "error",
+                "noDebugger": "error",
+                "noEmptyInterface": "error",
+                "noExplicitAny": "error",
+                "noRedundantUseStrict": "error"
+            }
+        }
+    },
     "javascript": {
         "formatter": {
             "jsxQuoteStyle": "double",

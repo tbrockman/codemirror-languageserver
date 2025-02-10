@@ -53,6 +53,8 @@ const client = Facet.define<LanguageServerClient, LanguageServerClient>({
 const documentUri = Facet.define<string, string>({ combine: useLast });
 const languageId = Facet.define<string, string>({ combine: useLast });
 
+const logger = console.log;
+
 // https://microsoft.github.io/language-server-protocol/specifications/specification-current/
 
 // Client to server then server to client
@@ -163,7 +165,7 @@ export class LanguageServerClient {
             textDocument: {
                 hover: {
                     dynamicRegistration: true,
-                    contentFormat: ["plaintext", "markdown"],
+                    contentFormat: ["markdown", "plaintext"],
                 },
                 moniker: {},
                 synchronization: {
@@ -427,7 +429,7 @@ class LanguageServerPlugin implements PluginValue {
         view: EditorView,
         { line, character }: { line: number; character: number },
     ): Promise<Tooltip | null> {
-        if (!this.client.ready || !this.client.capabilities?.hoverProvider) {
+        if (!(this.client.ready && this.client.capabilities?.hoverProvider)) {
             return null;
         }
 
@@ -459,7 +461,7 @@ class LanguageServerPlugin implements PluginValue {
         return {
             pos,
             end,
-            create: (view) => ({ dom }),
+            create: (_view) => ({ dom }),
             above: true,
         };
     }
@@ -476,8 +478,7 @@ class LanguageServerPlugin implements PluginValue {
         },
     ): Promise<CompletionResult | null> {
         if (
-            !this.client.ready ||
-            !this.client.capabilities?.completionProvider
+            !(this.client.ready && this.client.capabilities?.completionProvider)
         ) {
             return null;
         }
@@ -549,7 +550,7 @@ class LanguageServerPlugin implements PluginValue {
                 detail: labelDetails?.detail || detail,
                 apply(
                     view: EditorView,
-                    completion: Completion,
+                    _completion: Completion,
                     from: number,
                     to: number,
                 ) {
@@ -675,12 +676,11 @@ class LanguageServerPlugin implements PluginValue {
     }
 
     public async requestDefinition(
-        view: EditorView,
+        _view: EditorView,
         { line, character }: { line: number; character: number },
     ) {
         if (
-            !this.client.ready ||
-            !this.client.capabilities?.definitionProvider
+            !(this.client.ready && this.client.capabilities?.definitionProvider)
         ) {
             return;
         }
@@ -730,7 +730,7 @@ class LanguageServerPlugin implements PluginValue {
                     this.processDiagnostics(notification.params);
             }
         } catch (error) {
-            console.log(error);
+            logger(error);
         }
     }
 
@@ -740,7 +740,7 @@ class LanguageServerPlugin implements PluginValue {
         }
 
         const diagnostics = params.diagnostics.map(
-            async ({ range, message, severity, code, source }) => {
+            async ({ range, message, severity, code }) => {
                 const actions = await this.requestCodeActions(range, [
                     code as string,
                 ]);
@@ -787,8 +787,9 @@ class LanguageServerPlugin implements PluginValue {
                                     }
                                 }
                                 if ("command" in action && action.command) {
+                                    // TODO: Implement command execution
                                     // Execute command if present
-                                    console.log(
+                                    logger(
                                         "Executing command:",
                                         action.command,
                                     );
@@ -810,8 +811,7 @@ class LanguageServerPlugin implements PluginValue {
         diagnosticCodes: string[],
     ): Promise<(LSP.Command | LSP.CodeAction)[] | null> {
         if (
-            !this.client.ready ||
-            !this.client.capabilities?.codeActionProvider
+            !(this.client.ready && this.client.capabilities?.codeActionProvider)
         ) {
             return null;
         }

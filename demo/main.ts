@@ -24,7 +24,6 @@ class MockWebSocket {
         this.server = server;
         // Set up diagnostic notifications
         this.server.setOnDiagnostics((params) => {
-            console.log("diagnostic", params);
             if (this.onNotificationCallback) {
                 this.onNotificationCallback({
                     jsonrpc: "2.0",
@@ -86,7 +85,6 @@ class MockWebSocket {
                 .codeAction(anyParams)
                 .then((result) => this.respond(id, result));
         }
-        console.log("unhandled method", method);
     }
 
     addEventListener(

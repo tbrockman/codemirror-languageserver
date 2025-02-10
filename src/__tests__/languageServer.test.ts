@@ -1,7 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
-import { LanguageServerClient } from "../index";
 import { Transport } from "@open-rpc/client-js/build/transports/Transport";
+import { describe, expect, it, vi } from "vitest";
 import type { ClientCapabilities } from "vscode-languageserver-protocol";
+import { LanguageServerClient } from "../index";
 
 class MockTransport extends Transport {
     sendData = vi.fn().mockResolvedValue({});

@@ -1,65 +1,63 @@
 {
-  "name": "@marimo-team/codemirror-languageserver",
-  "publishConfig": {
-    "access": "public"
-  },
-  "sideEffects": false,
-  "version": "1.13.3",
-  "description": "Language Server Plugin for CodeMirror 6",
-  "files": [
-    "dist"
-  ],
-  "exports": {
-    "./package.json": "./package.json",
-    ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      }
+    "name": "@marimo-team/codemirror-languageserver",
+    "publishConfig": {
+        "access": "public"
+    },
+    "sideEffects": false,
+    "version": "1.13.3",
+    "description": "Language Server Plugin for CodeMirror 6",
+    "files": ["dist"],
+    "exports": {
+        "./package.json": "./package.json",
+        ".": {
+            "import": {
+                "types": "./dist/index.d.ts",
+                "default": "./dist/index.js"
+            }
+        }
+    },
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "type": "module",
+    "scripts": {
+        "prepare": "tsc",
+        "dev": "vite",
+        "build": "tsc",
+        "build:demo": "vite build",
+        "lint": "biome check --write",
+        "typecheck": "tsc --noEmit",
+        "preview": "vite preview",
+        "test": "vitest"
+    },
+    "homepage": "https://github.com/marimo-team/codemirror-languageserver",
+    "bugs": {
+        "url": "https://github.com/marimo-team/codemirror-languageserver/issues"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/marimo-team/codemirror-languageserver.git"
+    },
+    "license": "BSD-3-Clause",
+    "peerDependencies": {
+        "@codemirror/state": "^6",
+        "@codemirror/view": "^6"
+    },
+    "devDependencies": {
+        "@biomejs/biome": "1.9.4",
+        "@codemirror/state": "^6.5.2",
+        "@codemirror/view": "^6.36.2",
+        "@codemirror/lang-javascript": "^6.2.2",
+        "codemirror": "^6.0.1",
+        "events": "^3.3.0",
+        "typescript": "^5.7.3",
+        "vite": "^6.0.11",
+        "vitest": "^3.0.5"
+    },
+    "dependencies": {
+        "@codemirror/autocomplete": "^6.18.4",
+        "@codemirror/lint": "^6.8.4",
+        "@open-rpc/client-js": "^1.8.1",
+        "marked": "^15.0.6",
+        "vscode-languageserver-protocol": "^3.17.5"
     }
-  },
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "type": "module",
-  "scripts": {
-    "prepare": "tsc",
-    "dev": "vite",
-    "build": "tsc",
-    "build:demo": "vite build",
-    "lint": "biome check --write",
-    "typecheck": "tsc --noEmit",
-    "preview": "vite preview",
-    "test": "vitest"
-  },
-  "homepage": "https://github.com/marimo-team/codemirror-languageserver",
-  "bugs": {
-    "url": "https://github.com/marimo-team/codemirror-languageserver/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/marimo-team/codemirror-languageserver.git"
-  },
-  "license": "BSD-3-Clause",
-  "peerDependencies": {
-    "@codemirror/state": "^6",
-    "@codemirror/view": "^6"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "1.9.4",
-    "@codemirror/state": "^6.5.2",
-    "@codemirror/view": "^6.36.2",
-    "@codemirror/lang-javascript": "^6.2.2",
-    "codemirror": "^6.0.1",
-    "events": "^3.3.0",
-    "typescript": "^5.7.3",
-    "vite": "^6.0.11",
-    "vitest": "^3.0.5"
-  },
-  "dependencies": {
-    "@codemirror/autocomplete": "^6.18.4",
-    "@codemirror/lint": "^6.8.4",
-    "@open-rpc/client-js": "^1.8.1",
-    "marked": "^15.0.6",
-    "vscode-languageserver-protocol": "^3.17.5"
-  }
 }
