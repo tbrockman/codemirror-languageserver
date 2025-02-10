@@ -3,7 +3,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "version": "1.13.0",
+  "version": "1.13.1",
   "description": "Language Server Plugin for CodeMirror 6",
   "main": "dist/index.js",
   "files": [
