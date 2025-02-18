@@ -347,21 +347,17 @@ export class LanguageServerClient {
 }
 
 class LanguageServerPlugin implements PluginValue {
-    public client: LanguageServerClient;
-
-    private documentUri: string;
-    private languageId: string;
     private documentVersion: number;
 
     private changesTimeout: number;
 
     constructor(
+        public client: LanguageServerClient,
+        private documentUri: string,
+        private languageId: string,
         private view: EditorView,
         private allowHTMLContent = false,
     ) {
-        this.client = this.view.state.facet(client);
-        this.documentUri = this.view.state.facet(documentUri);
-        this.languageId = this.view.state.facet(languageId);
         this.documentVersion = 0;
         this.changesTimeout = 0;
 
@@ -1049,15 +1045,22 @@ export function languageServerWithTransport(options: LanguageServerOptions) {
         ...options.keyboardShortcuts,
     };
 
+    const lsClient =
+        options.client ||
+        new LanguageServerClient({ ...options, autoClose: true });
+
     return [
-        client.of(
-            options.client ||
-                new LanguageServerClient({ ...options, autoClose: true }),
-        ),
+        client.of(lsClient),
         documentUri.of(options.documentUri),
         languageId.of(options.languageId),
         ViewPlugin.define((view) => {
-            plugin = new LanguageServerPlugin(view, options.allowHTMLContent);
+            plugin = new LanguageServerPlugin(
+                lsClient,
+                options.documentUri,
+                options.languageId,
+                view,
+                options.allowHTMLContent,
+            );
             return plugin;
         }),
         hoverTooltip(
