@@ -1,5 +1,5 @@
 import { autocompletion, insertCompletionText } from "@codemirror/autocomplete";
-import { setDiagnostics } from "@codemirror/lint";
+import { type Action, type Diagnostic, setDiagnostics } from "@codemirror/lint";
 import { Facet } from "@codemirror/state";
 import {
     EditorView,
@@ -115,7 +115,7 @@ export class LanguageServerClient {
     private requestManager: RequestManager;
     private client: Client;
     private initializationOptions: LanguageServerClientOptions["initializationOptions"];
-    private clientCapabilities: LanguageServerClientOptions["capabilities"];
+    public clientCapabilities: LanguageServerClientOptions["capabilities"];
 
     private plugins: LanguageServerPlugin[];
 
@@ -348,8 +348,8 @@ export class LanguageServerClient {
 
 class LanguageServerPlugin implements PluginValue {
     private documentVersion: number;
-
     private changesTimeout: number;
+    private onGoToDefinition?: (result: DefinitionResult) => void;
 
     constructor(
         public client: LanguageServerClient,
@@ -357,9 +357,11 @@ class LanguageServerPlugin implements PluginValue {
         private languageId: string,
         private view: EditorView,
         private allowHTMLContent = false,
+        onGoToDefinition?: (result: DefinitionResult) => void,
     ) {
         this.documentVersion = 0;
         this.changesTimeout = 0;
+        this.onGoToDefinition = onGoToDefinition;
 
         this.client.attachPlugin(this);
 
@@ -698,25 +700,36 @@ class LanguageServerPlugin implements PluginValue {
         const range =
             "range" in location ? location.range : location.targetRange;
 
-        console.debug(
-            `Definition found at ${uri}:${range.start.line}:${range.start.character}`,
-        );
+        // Check if the definition is in a different document
+        const isExternalDocument = uri !== this.documentUri;
 
-        // Not from the same document
-        if (uri !== this.documentUri) {
-            return;
+        // Create the definition result
+        const definitionResult: DefinitionResult = {
+            uri,
+            range,
+            isExternalDocument,
+        };
+
+        // If it's the same document, update the selection
+        if (!isExternalDocument) {
+            this.view.dispatch(
+                this.view.state.update({
+                    selection: {
+                        anchor: posToOffsetOrZero(
+                            this.view.state.doc,
+                            range.start,
+                        ),
+                        head: posToOffset(this.view.state.doc, range.end),
+                    },
+                }),
+            );
         }
 
-        this.view.dispatch(
-            this.view.state.update({
-                selection: {
-                    anchor: posToOffsetOrZero(this.view.state.doc, range.start),
-                    head: posToOffset(this.view.state.doc, range.end),
-                },
-            }),
-        );
+        if (this.onGoToDefinition) {
+            this.onGoToDefinition(definitionResult);
+        }
 
-        return { uri, range };
+        return definitionResult;
     }
 
     public processNotification(notification: Notification) {
@@ -735,64 +748,75 @@ class LanguageServerPlugin implements PluginValue {
             return;
         }
 
+        const severityMap: Record<DiagnosticSeverity, Diagnostic["severity"]> =
+            {
+                [DiagnosticSeverity.Error]: "error",
+                [DiagnosticSeverity.Warning]: "warning",
+                [DiagnosticSeverity.Information]: "info",
+                [DiagnosticSeverity.Hint]: "info",
+            };
+
         const diagnostics = params.diagnostics.map(
             async ({ range, message, severity, code }) => {
                 const actions = await this.requestCodeActions(range, [
                     code as string,
                 ]);
-                return {
-                    from: posToOffsetOrZero(this.view.state.doc, range.start),
-                    to: posToOffsetOrZero(this.view.state.doc, range.end),
-                    severity: (
-                        {
-                            [DiagnosticSeverity.Error]: "error",
-                            [DiagnosticSeverity.Warning]: "warning",
-                            [DiagnosticSeverity.Information]: "info",
-                            [DiagnosticSeverity.Hint]: "info",
-                        } as const
-                    )[severity ?? DiagnosticSeverity.Error],
-                    message,
-                    actions:
-                        actions?.map((action) => ({
-                            name:
-                                "command" in action &&
-                                typeof action.command === "object"
-                                    ? action.command?.title || action.title
-                                    : action.title,
-                            apply: async () => {
-                                if ("edit" in action && action.edit) {
-                                    // Apply workspace edit
-                                    for (const change of action.edit.changes?.[
-                                        this.documentUri
-                                    ] || []) {
-                                        this.view.dispatch(
-                                            this.view.state.update({
-                                                changes: {
-                                                    from: posToOffsetOrZero(
-                                                        this.view.state.doc,
-                                                        change.range.start,
-                                                    ),
-                                                    to: posToOffset(
-                                                        this.view.state.doc,
-                                                        change.range.end,
-                                                    ),
-                                                    insert: change.newText,
-                                                },
-                                            }),
-                                        );
-                                    }
+
+                const codemirrorActions = actions?.map(
+                    (action): Action => ({
+                        name:
+                            "command" in action &&
+                            typeof action.command === "object"
+                                ? action.command?.title || action.title
+                                : action.title,
+                        apply: async () => {
+                            if ("edit" in action && action.edit?.changes) {
+                                const changes =
+                                    action.edit.changes[this.documentUri];
+
+                                if (!changes) {
+                                    return;
                                 }
-                                if ("command" in action && action.command) {
-                                    // TODO: Implement command execution
-                                    // Execute command if present
-                                    logger(
-                                        "Executing command:",
-                                        action.command,
+
+                                // Apply workspace edit
+                                for (const change of changes) {
+                                    this.view.dispatch(
+                                        this.view.state.update({
+                                            changes: {
+                                                from: posToOffsetOrZero(
+                                                    this.view.state.doc,
+                                                    change.range.start,
+                                                ),
+                                                to: posToOffset(
+                                                    this.view.state.doc,
+                                                    change.range.end,
+                                                ),
+                                                insert: change.newText,
+                                            },
+                                        }),
                                     );
                                 }
-                            },
-                        })) || [],
+                            }
+
+                            if ("command" in action && action.command) {
+                                // TODO: Implement command execution
+                                // Execute command if present
+                                logger("Executing command:", action.command);
+                            }
+                        },
+                    }),
+                );
+
+                const diagnostic: Diagnostic = {
+                    from: posToOffsetOrZero(this.view.state.doc, range.start),
+                    to: posToOffsetOrZero(this.view.state.doc, range.end),
+                    severity: severityMap[severity ?? DiagnosticSeverity.Error],
+                    message: message,
+                    source: this.languageId,
+                    actions: codemirrorActions,
                 };
+
+                return diagnostic;
             },
         );
 
@@ -1019,10 +1043,17 @@ interface KeyboardShortcuts {
     goToDefinition?: string;
 }
 
+interface DefinitionResult {
+    uri: string;
+    range: LSP.Range;
+    isExternalDocument: boolean;
+}
+
 interface LanguageServerOptions extends LanguageServerClientOptions {
     client?: LanguageServerClient;
     allowHTMLContent?: boolean;
     keyboardShortcuts?: KeyboardShortcuts;
+    onGoToDefinition?: (result: DefinitionResult) => void;
 }
 
 interface LanguageServerWebsocketOptions extends LanguageServerBaseOptions {
@@ -1060,6 +1091,7 @@ export function languageServerWithTransport(options: LanguageServerOptions) {
                 options.languageId,
                 view,
                 options.allowHTMLContent,
+                options.onGoToDefinition,
             );
             return plugin;
         }),

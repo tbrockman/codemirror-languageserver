@@ -36,9 +36,10 @@ class MockWebSocket {
 
     send(data: IJSONRPCData) {
         const request = data;
-        const { method, id, params } = request.request;
+        const { method, id: _id, params } = request.request;
         // biome-ignore lint/suspicious/noExplicitAny: <explanation>
         const anyParams = params as any;
+        const id = _id ?? "_";
 
         // Handle LSP messages
         if (method === "initialize") {
@@ -198,6 +199,9 @@ const state = EditorState.create({
             documentUri: "file:///example.ts",
             languageId: "typescript",
             transport: mockTransport,
+            onGoToDefinition: (result) => {
+                console.log("Go to definition", result);
+            },
         }),
     ],
 });

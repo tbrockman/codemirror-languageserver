@@ -229,9 +229,22 @@ export class MockLSPServer {
     public async definition(
         params: LSP.DefinitionParams,
     ): Promise<LSP.Definition> {
-        // Return mock definition at start of document
+        const random = Math.random();
+        // Half the time, return a location in the document
+        if (random < 0.5) {
+            // Return mock definition at start of document
+            return {
+                uri: params.textDocument.uri,
+                range: {
+                    start: { line: 0, character: 0 },
+                    end: { line: 0, character: 5 },
+                },
+            };
+        }
+
+        // Otherwise, return a location in a random file
         return {
-            uri: params.textDocument.uri,
+            uri: `file:///${random}.ts`,
             range: {
                 start: { line: 0, character: 0 },
                 end: { line: 0, character: 5 },
@@ -369,5 +382,41 @@ export class MockLSPServer {
             severity: DiagnosticSeverity.Warning,
             source: "mock-lsp",
         });
+    }
+
+    // Add a method to simulate external document definition
+    public setExternalDefinitionTarget(targetUri: string) {
+        // Override the definition method to return an external document
+        this.definition = async (
+            params: LSP.DefinitionParams,
+        ): Promise<LSP.Definition> => {
+            // Use params for logging or other purposes if needed
+            console.debug(
+                `Definition requested for ${params.textDocument.uri} at position ${params.position.line}:${params.position.character}`,
+            );
+
+            return {
+                uri: targetUri, // External document URI
+                range: {
+                    start: { line: 0, character: 0 },
+                    end: { line: 0, character: 5 },
+                },
+            };
+        };
+    }
+
+    // Reset to default behavior (same document definition)
+    public resetDefinitionTarget() {
+        this.definition = async (
+            params: LSP.DefinitionParams,
+        ): Promise<LSP.Definition> => {
+            return {
+                uri: params.textDocument.uri,
+                range: {
+                    start: { line: 0, character: 0 },
+                    end: { line: 0, character: 5 },
+                },
+            };
+        };
     }
 }
