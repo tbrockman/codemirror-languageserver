@@ -278,6 +278,7 @@ export class LanguageServerClient {
     }
 
     public async textDocumentHover(params: LSP.HoverParams) {
+        console.log('received text document hover', params)
         return await this.request("textDocument/hover", params, timeout);
     }
 
@@ -749,12 +750,12 @@ class LanguageServerPlugin implements PluginValue {
         }
 
         const severityMap: Record<DiagnosticSeverity, Diagnostic["severity"]> =
-            {
-                [DiagnosticSeverity.Error]: "error",
-                [DiagnosticSeverity.Warning]: "warning",
-                [DiagnosticSeverity.Information]: "info",
-                [DiagnosticSeverity.Hint]: "info",
-            };
+        {
+            [DiagnosticSeverity.Error]: "error",
+            [DiagnosticSeverity.Warning]: "warning",
+            [DiagnosticSeverity.Information]: "info",
+            [DiagnosticSeverity.Hint]: "info",
+        };
 
         const diagnostics = params.diagnostics.map(
             async ({ range, message, severity, code }) => {
@@ -766,7 +767,7 @@ class LanguageServerPlugin implements PluginValue {
                     (action): Action => ({
                         name:
                             "command" in action &&
-                            typeof action.command === "object"
+                                typeof action.command === "object"
                                 ? action.command?.title || action.title
                                 : action.title,
                         apply: async () => {
@@ -1031,10 +1032,10 @@ interface LanguageServerClientOptions extends LanguageServerBaseOptions {
     transport: Transport;
     autoClose?: boolean;
     capabilities?:
-        | LSP.InitializeParams["capabilities"]
-        | ((
-              defaultCapabilities: LSP.InitializeParams["capabilities"],
-          ) => LSP.InitializeParams["capabilities"]);
+    | LSP.InitializeParams["capabilities"]
+    | ((
+        defaultCapabilities: LSP.InitializeParams["capabilities"],
+    ) => LSP.InitializeParams["capabilities"]);
     initializationOptions?: LSP.InitializeParams["initializationOptions"];
 }
 
@@ -1096,11 +1097,13 @@ export function languageServerWithTransport(options: LanguageServerOptions) {
             return plugin;
         }),
         hoverTooltip(
-            (view, pos) =>
-                plugin?.requestHoverTooltip(
+            (view, pos) => {
+                console.log('hover tooltip listener');
+                return plugin?.requestHoverTooltip(
                     view,
                     offsetToPos(view.state.doc, pos),
-                ) ?? null,
+                ) ?? null;
+            }
         ),
         autocompletion({
             override: [
@@ -1108,6 +1111,8 @@ export function languageServerWithTransport(options: LanguageServerOptions) {
                     if (plugin == null) {
                         return null;
                     }
+
+                    console.log('autocompletion?', context)
 
                     const { state, pos, explicit } = context;
                     const line = state.doc.lineAt(pos);
