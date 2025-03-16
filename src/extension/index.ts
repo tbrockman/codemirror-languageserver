@@ -171,4 +171,5 @@ export function languageServerWithTransport(options: LanguageServerOptions) {
     ];
 }
 
-export * from './plugin.js';
+export { LanguageServerPlugin } from './plugin.js';
+export { languageServerTheme } from './theme.js';

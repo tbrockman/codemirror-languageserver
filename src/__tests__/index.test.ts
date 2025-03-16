@@ -344,6 +344,7 @@ describe("exports", () => {
             "LanguageServerClientImpl",
             "LanguageServerPlugin",
             "languageServer",
+            "languageServerTheme",
             "languageServerWithTransport",
           ]
         `);
