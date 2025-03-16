@@ -2,11 +2,13 @@ import { Text } from "@codemirror/state";
 import { WebSocketTransport } from "@open-rpc/client-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-    LanguageServerClient,
+    LanguageServerClientImpl,
     languageServer,
     languageServerWithTransport,
 } from "../index";
 import { offsetToPos, posToOffset } from "../utils";
+import { LanguageServerClient } from "../types";
+import { CompletionItem } from "vscode-languageserver-protocol";
 
 // Mock WebSocket transport
 vi.mock("@open-rpc/client-js", () => ({
@@ -55,7 +57,7 @@ describe("LanguageServer", () => {
         const mockTransport = new WebSocketTransport("ws://test");
 
         beforeEach(() => {
-            client = new LanguageServerClient({
+            client = new LanguageServerClientImpl({
                 transport: mockTransport,
                 rootUri: "file:///test",
                 workspaceFolders: [{ uri: "file:///test", name: "test" }],
@@ -88,7 +90,7 @@ describe("LanguageServer", () => {
         it("should handle completion item resolution", async () => {
             await client.initialize();
 
-            const mockCompletionItem = {
+            const mockCompletionItem: CompletionItem = {
                 label: "test",
                 kind: 1,
                 data: 1,
@@ -339,7 +341,8 @@ describe("exports", () => {
         const exports = await import("../index");
         expect(Object.keys(exports).sort()).toMatchInlineSnapshot(`
           [
-            "LanguageServerClient",
+            "LanguageServerClientImpl",
+            "LanguageServerPlugin",
             "languageServer",
             "languageServerWithTransport",
           ]

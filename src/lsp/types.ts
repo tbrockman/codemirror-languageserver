@@ -39,6 +39,11 @@ export interface LanguageServerClient {
     initializePromise: Promise<void>;
     clientCapabilities: LanguageServerClientOptions["capabilities"];
 
+    initialize: () => Promise<void>;
+    close: () => void;
+    attachPlugin: (plugin: LanguageServerPlugin) => void;
+    detachPlugin: (plugin: LanguageServerPlugin) => void;
+
     textDocumentDidOpen: (params: LSP.DidOpenTextDocumentParams) => Promise<LSP.DidOpenTextDocumentParams>;
     textDocumentDidChange: (params: LSP.DidChangeTextDocumentParams) => Promise<LSP.DidChangeTextDocumentParams>;
     textDocumentHover: (params: LSP.HoverParams) => Promise<LSP.Hover>;
@@ -48,10 +53,6 @@ export interface LanguageServerClient {
     textDocumentCodeAction: (params: LSP.CodeActionParams) => Promise<(LSP.Command | LSP.CodeAction)[] | null>;
     textDocumentRename: (params: LSP.RenameParams) => Promise<LSP.WorkspaceEdit | null>;
     textDocumentPrepareRename: (params: LSP.PrepareRenameParams) => Promise<LSP.Range | LSP.PrepareRenameResult | null>;
-
-    close: () => void;
-    attachPlugin: (plugin: LanguageServerPlugin) => void;
-    detachPlugin: (plugin: LanguageServerPlugin) => void;
 }
 
 export interface LanguageServerOptions extends LanguageServerClientOptions {

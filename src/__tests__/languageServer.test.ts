@@ -1,7 +1,7 @@
 import { Transport } from "@open-rpc/client-js/build/transports/Transport";
 import { describe, expect, it, vi } from "vitest";
 import type { ClientCapabilities } from "vscode-languageserver-protocol";
-import { LanguageServerClient } from "../index";
+import { LanguageServerClientImpl } from "../index";
 
 class MockTransport extends Transport {
     sendData = vi.fn().mockResolvedValue({});
@@ -15,7 +15,7 @@ const transport = new MockTransport();
 
 describe("LanguageServerClient initialization options", () => {
     it("uses default capabilities when none provided", async () => {
-        const client = new LanguageServerClient({
+        const client = new LanguageServerClientImpl({
             transport,
             rootUri: "file:///root",
             workspaceFolders: [{ uri: "file:///root", name: "root" }],
@@ -43,7 +43,7 @@ describe("LanguageServerClient initialization options", () => {
             },
         };
 
-        const client = new LanguageServerClient({
+        const client = new LanguageServerClientImpl({
             transport,
             rootUri: "file:///root",
             workspaceFolders: [{ uri: "file:///root", name: "root" }],
@@ -59,7 +59,7 @@ describe("LanguageServerClient initialization options", () => {
     });
 
     it("allows modifying capabilities with function", async () => {
-        const client = new LanguageServerClient({
+        const client = new LanguageServerClientImpl({
             transport,
             rootUri: "file:///root",
             workspaceFolders: [{ uri: "file:///root", name: "root" }],
@@ -96,7 +96,7 @@ describe("LanguageServerClient initialization options", () => {
             maxNumberOfProblems: 100,
         };
 
-        const client = new LanguageServerClient({
+        const client = new LanguageServerClientImpl({
             transport,
             rootUri: "file:///root",
             workspaceFolders: [{ uri: "file:///root", name: "root" }],

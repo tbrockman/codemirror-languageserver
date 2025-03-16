@@ -6,9 +6,8 @@ import type LSP from 'vscode-languageserver-protocol';
 import { formatContents, isLSPTextEdit, posToOffset, posToOffsetOrZero, prefixMatch, showErrorMessage } from "../utils/index.js";
 import { Action, Diagnostic, setDiagnostics } from "@codemirror/lint";
 
-export const changesDelay = 500;
-
-export const CompletionItemKindMap = Object.fromEntries(
+const changesDelay = 500;
+const CompletionItemKindMap = Object.fromEntries(
     Object.entries(CompletionItemKind).map(([key, value]) => [value, key]),
 ) as Record<CompletionItemKind, string>;
 const logger = console.log;
