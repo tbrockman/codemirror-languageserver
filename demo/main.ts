@@ -10,7 +10,7 @@ import type {
 } from "@open-rpc/client-js/build/Request";
 import { Transport } from "@open-rpc/client-js/build/transports/Transport";
 import { basicSetup } from "codemirror";
-import { languageServerWithTransport } from "../src";
+import { languageServerTheme, languageServerWithTransport } from "../src";
 import { MockLSPServer } from "./mockLSP";
 
 // Create mock WebSocket transport
@@ -203,12 +203,13 @@ const state = EditorState.create({
                 console.log("Go to definition", result);
             },
         }),
+        languageServerTheme
     ],
 });
 
 const view = new EditorView({
     state,
-    parent: document.querySelector("#editor"),
+    parent: document.querySelector("#editor")!,
 });
 
 // Set up diagnostic buttons

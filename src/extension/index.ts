@@ -15,7 +15,7 @@ import {
     offsetToPos,
     showErrorMessage,
 } from "../utils/index.js";
-import { LanguageServerClient, LanguageServerOptions, LanguageServerWebsocketOptions } from "../types.js";
+import { LanguageServerClient, LanguageServerOptions, LanguageServerWebsocketOptions } from "../lsp/types.js";
 import { LanguageServerPlugin } from "./plugin.js";
 import { LanguageServerClientImpl } from "../lsp/client.js";
 

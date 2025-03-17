@@ -97,7 +97,7 @@ export class LanguageServerPlugin implements PluginValue {
             return null;
         }
 
-        this.sendChange({ documentText: view.state.doc.toString() });
+        // this.sendChange({ documentText: view.state.doc.toString() });
         const result = await this.client.textDocumentHover({
             textDocument: { uri: this.documentUri },
             position: { line, character },
@@ -427,6 +427,8 @@ export class LanguageServerPlugin implements PluginValue {
                 const actions = await this.requestCodeActions(range, [
                     code as string,
                 ]);
+
+                console.log('diagnostic actions', actions, 'message', message)
 
                 const codemirrorActions = actions?.map(
                     (action): Action => ({
