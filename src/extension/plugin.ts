@@ -106,6 +106,7 @@ export class LanguageServerPlugin implements PluginValue {
             return null;
         }
         const { contents, range } = result;
+        console.debug('hover tooltip', { result })
         let pos = posToOffset(view.state.doc, { line, character });
         let end: number | undefined;
         if (range) {
@@ -146,9 +147,9 @@ export class LanguageServerPlugin implements PluginValue {
         ) {
             return null;
         }
-        this.sendChange({
-            documentText: context.state.doc.toString(),
-        });
+        // this.sendChange({
+        //     documentText: context.state.doc.toString(),
+        // });
 
         const result = await this.client.textDocumentCompletion({
             textDocument: { uri: this.documentUri },
@@ -205,7 +206,6 @@ export class LanguageServerPlugin implements PluginValue {
                 kind,
                 textEdit,
                 insertText,
-                documentation,
                 additionalTextEdits,
             } = item;
 
@@ -286,49 +286,49 @@ export class LanguageServerPlugin implements PluginValue {
             };
 
             // Support lazy loading of documentation through completionItem/resolve
-            if (this.client.capabilities?.completionProvider?.resolveProvider) {
-                completion.info = async () => {
-                    try {
-                        const resolved =
-                            await this.client.completionItemResolve(item);
-                        const dom = document.createElement("div");
-                        dom.classList.add("documentation");
-                        const content = resolved.documentation || documentation;
-                        if (this.allowHTMLContent) {
-                            dom.innerHTML = formatContents(content);
-                        } else {
-                            dom.textContent = formatContents(content);
-                        }
-                        return dom;
-                    } catch (e) {
-                        console.error("Failed to resolve completion item:", e);
-                        // Fallback to existing documentation if resolve fails
-                        if (documentation) {
-                            const dom = document.createElement("div");
-                            dom.classList.add("documentation");
-                            if (this.allowHTMLContent) {
-                                dom.innerHTML = formatContents(documentation);
-                            } else {
-                                dom.textContent = formatContents(documentation);
-                            }
-                            return dom;
-                        }
-                        return null;
-                    }
-                };
-            } else if (documentation) {
-                // Fallback for servers without resolve support
-                completion.info = () => {
-                    const dom = document.createElement("div");
-                    dom.classList.add("documentation");
-                    if (this.allowHTMLContent) {
-                        dom.innerHTML = formatContents(documentation);
-                    } else {
-                        dom.textContent = formatContents(documentation);
-                    }
-                    return dom;
-                };
-            }
+            // if (this.client.capabilities?.completionProvider?.resolveProvider) {
+            //     completion.info = async () => {
+            //         try {
+            //             const resolved =
+            //                 await this.client.completionItemResolve(item);
+            //             const dom = document.createElement("div");
+            //             dom.classList.add("documentation");
+            //             const content = resolved.documentation || documentation;
+            //             if (this.allowHTMLContent) {
+            //                 dom.innerHTML = formatContents(content);
+            //             } else {
+            //                 dom.textContent = formatContents(content);
+            //             }
+            //             return dom;
+            //         } catch (e) {
+            //             console.error("Failed to resolve completion item:", e);
+            //             // Fallback to existing documentation if resolve fails
+            //             if (documentation) {
+            //                 const dom = document.createElement("div");
+            //                 dom.classList.add("documentation");
+            //                 if (this.allowHTMLContent) {
+            //                     dom.innerHTML = formatContents(documentation);
+            //                 } else {
+            //                     dom.textContent = formatContents(documentation);
+            //                 }
+            //                 return dom;
+            //             }
+            //             return null;
+            //         }
+            //     };
+            // } else if (documentation) {
+            //     // Fallback for servers without resolve support
+            //     completion.info = () => {
+            //         const dom = document.createElement("div");
+            //         dom.classList.add("documentation");
+            //         if (this.allowHTMLContent) {
+            //             dom.innerHTML = formatContents(documentation);
+            //         } else {
+            //             dom.textContent = formatContents(documentation);
+            //         }
+            //         return dom;
+            //     };
+            // }
             return completion;
         });
 
@@ -427,8 +427,6 @@ export class LanguageServerPlugin implements PluginValue {
                 const actions = await this.requestCodeActions(range, [
                     code as string,
                 ]);
-
-                console.log('diagnostic actions', actions, 'message', message)
 
                 const codemirrorActions = actions?.map(
                     (action): Action => ({

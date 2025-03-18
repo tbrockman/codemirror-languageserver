@@ -66,7 +66,6 @@ export function languageServerWithTransport(options: LanguageServerOptions) {
         }),
         hoverTooltip(
             (view, pos) => {
-                console.log('hover tooltip listener');
                 return plugin?.requestHoverTooltip(
                     view,
                     offsetToPos(view.state.doc, pos),
