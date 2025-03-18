@@ -8,6 +8,10 @@ export function posToOffset(
     pos: { line: number; character: number },
 ): number | undefined {
     if (pos.line >= doc.lines) {
+        // Next line (implying the end of the document)
+        if (pos.character === 0) {
+            return doc.length;
+        }
         return;
     }
     const offset = doc.line(pos.line + 1).from + pos.character;

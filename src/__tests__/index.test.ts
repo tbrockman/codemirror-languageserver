@@ -5,7 +5,7 @@ import {
     LanguageServerClient,
     languageServer,
     languageServerWithTransport,
-} from "../index";
+} from "../plugin";
 import { offsetToPos, posToOffset } from "../utils";
 
 // Mock WebSocket transport
@@ -35,8 +35,12 @@ describe("LanguageServer", () => {
             expect(posToOffset(doc, { line: 0, character: 5 })).toBe(5);
             expect(posToOffset(doc, { line: 1, character: 0 })).toBe(11);
 
+            // Edge-case, if the line is out of bounds,
+            expect(posToOffset(doc, { line: 5, character: 0 })).toBe(
+                doc.length,
+            );
+
             // Test invalid positions
-            expect(posToOffset(doc, { line: 5, character: 0 })).toBeUndefined();
             expect(
                 posToOffset(doc, { line: 0, character: 50 }),
             ).toBeUndefined();
