@@ -335,6 +335,15 @@ export class MockLSPServer {
             changes: {
                 [params.textDocument.uri]: changes,
             },
+            documentChanges: [
+                {
+                    textDocument: {
+                        uri: params.textDocument.uri,
+                        version: 1,
+                    },
+                    edits: changes,
+                },
+            ],
         };
     }
 

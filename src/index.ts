@@ -929,52 +929,119 @@ class LanguageServerPlugin implements PluginValue {
                         newName,
                     });
 
-                    if (!edit?.changes) {
+                    const changesMap = edit?.changes ?? {};
+                    const documentChanges = edit?.documentChanges ?? [];
+
+                    if (
+                        Object.keys(changesMap).length === 0 &&
+                        documentChanges.length === 0
+                    ) {
                         showErrorMessage(view, "No changes to apply");
                         popup.remove();
                         return;
                     }
 
-                    // Apply all changes
-                    for (const [uri, changes] of Object.entries(edit.changes)) {
-                        if (uri !== this.documentUri) {
-                            showErrorMessage(
-                                view,
-                                "Multi-file rename not supported yet",
-                            );
-                            continue;
+                    // Handle documentChanges (preferred) if available
+                    if (documentChanges.length > 0) {
+                        for (const docChange of documentChanges) {
+                            if ("textDocument" in docChange) {
+                                // This is a TextDocumentEdit
+                                const uri = docChange.textDocument.uri;
+
+                                if (uri !== this.documentUri) {
+                                    showErrorMessage(
+                                        view,
+                                        "Multi-file rename not supported yet",
+                                    );
+                                    continue;
+                                }
+
+                                // Sort edits in reverse order to avoid position shifts
+                                const sortedEdits = docChange.edits.sort(
+                                    (a, b) => {
+                                        const posA = posToOffset(
+                                            view.state.doc,
+                                            a.range.start,
+                                        );
+                                        const posB = posToOffset(
+                                            view.state.doc,
+                                            b.range.start,
+                                        );
+                                        return (posB ?? 0) - (posA ?? 0);
+                                    },
+                                );
+
+                                view.dispatch(
+                                    view.state.update({
+                                        changes: sortedEdits.map((edit) => ({
+                                            from:
+                                                posToOffset(
+                                                    view.state.doc,
+                                                    edit.range.start,
+                                                ) ?? 0,
+                                            to:
+                                                posToOffset(
+                                                    view.state.doc,
+                                                    edit.range.end,
+                                                ) ?? 0,
+                                            insert: edit.newText,
+                                        })),
+                                    }),
+                                );
+                            } else {
+                                // This is a CreateFile, RenameFile, or DeleteFile operation
+                                showErrorMessage(
+                                    view,
+                                    "File creation, deletion, or renaming operations not supported yet",
+                                );
+                            }
                         }
+                    }
+                    // Fall back to changes if documentChanges is not available
+                    else if (changesMap) {
+                        // Apply all changes
+                        for (const [uri, changes] of Object.entries(
+                            changesMap,
+                        )) {
+                            if (uri !== this.documentUri) {
+                                showErrorMessage(
+                                    view,
+                                    "Multi-file rename not supported yet",
+                                );
+                                continue;
+                            }
 
-                        // Sort changes in reverse order to avoid position shifts
-                        const sortedChanges = changes.sort((a, b) => {
-                            const posA = posToOffset(
-                                view.state.doc,
-                                a.range.start,
-                            );
-                            const posB = posToOffset(
-                                view.state.doc,
-                                b.range.start,
-                            );
-                            return (posB ?? 0) - (posA ?? 0);
-                        });
+                            // Sort changes in reverse order to avoid position shifts
+                            const sortedChanges = changes.sort((a, b) => {
+                                const posA = posToOffset(
+                                    view.state.doc,
+                                    a.range.start,
+                                );
+                                const posB = posToOffset(
+                                    view.state.doc,
+                                    b.range.start,
+                                );
+                                return (posB ?? 0) - (posA ?? 0);
+                            });
 
-                        view.dispatch(
-                            view.state.update({
-                                changes: sortedChanges.map((change) => ({
-                                    from:
-                                        posToOffset(
-                                            view.state.doc,
-                                            change.range.start,
-                                        ) ?? 0,
-                                    to:
-                                        posToOffset(
-                                            view.state.doc,
-                                            change.range.end,
-                                        ) ?? 0,
-                                    insert: change.newText,
-                                })),
-                            }),
-                        );
+                            view.dispatch(
+                                view.state.update({
+                                    changes: sortedChanges.map((change) => ({
+                                        from:
+                                            posToOffset(
+                                                view.state.doc,
+                                                change.range.start,
+                                            ) ?? 0,
+                                        to:
+                                            posToOffset(
+                                                view.state.doc,
+                                                change.range.end,
+                                            ) ?? 0,
+                                        insert: change.newText,
+                                    })),
+                                }),
+                            );
+                        }
                     }
                 } catch (error) {
                     showErrorMessage(
