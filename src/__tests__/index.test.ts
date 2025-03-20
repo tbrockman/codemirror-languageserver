@@ -1,6 +1,8 @@
-import { Text } from "@codemirror/state";
+import { EditorState, Text } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
 import { WebSocketTransport } from "@open-rpc/client-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { CompletionItem } from "vscode-languageserver-protocol";
 import {
     LanguageServerClient,
     languageServer,
@@ -63,8 +65,6 @@ describe("LanguageServer", () => {
                 transport: mockTransport,
                 rootUri: "file:///test",
                 workspaceFolders: [{ uri: "file:///test", name: "test" }],
-                documentUri: "file:///test/file.ts",
-                languageId: "typescript",
             });
         });
 
@@ -92,7 +92,7 @@ describe("LanguageServer", () => {
         it("should handle completion item resolution", async () => {
             await client.initialize();
 
-            const mockCompletionItem = {
+            const mockCompletionItem: CompletionItem = {
                 label: "test",
                 kind: 1,
                 data: 1,
@@ -189,15 +189,13 @@ describe("LanguageServer", () => {
 
             // Create a mock EditorView with the necessary methods
             const mockDoc = Text.of(["test document"]);
-            const mockView = {
-                state: {
+            const mockView = new EditorView({
+                doc: mockDoc,
+                state: EditorState.create({
                     doc: mockDoc,
-                    selection: { main: { head: 5 } },
-                    update: vi.fn().mockReturnValue({ selection: {} }),
-                },
-                dispatch: vi.fn(),
-                posAtCoords: vi.fn().mockReturnValue(5),
-            };
+                    selection: { anchor: 5, head: 5 },
+                }),
+            });
 
             // We need to use languageServerWithTransport instead of languageServer
             // because languageServer expects a WebSocket URI and creates a new client
@@ -223,7 +221,7 @@ describe("LanguageServer", () => {
             // Manually create the plugin to trigger attachPlugin
             if (viewPluginExt && "create" in viewPluginExt) {
                 // @ts-ignore - We know this is a ViewPlugin
-                viewPluginExt.create(mockView as any);
+                viewPluginExt.create(mockView);
 
                 // Now attachPlugin should have been called
                 expect(mockClient.attachPlugin).toHaveBeenCalled();
@@ -278,15 +276,13 @@ describe("LanguageServer", () => {
 
             // Create a mock EditorView with the necessary methods
             const mockDoc = Text.of(["test document"]);
-            const mockView = {
-                state: {
+            const mockView = new EditorView({
+                doc: mockDoc,
+                state: EditorState.create({
                     doc: mockDoc,
-                    selection: { main: { head: 5 } },
-                    update: vi.fn().mockReturnValue({ selection: {} }),
-                },
-                dispatch: vi.fn(),
-                posAtCoords: vi.fn().mockReturnValue(5),
-            };
+                    selection: { anchor: 5, head: 5 },
+                }),
+            });
 
             // We need to use languageServerWithTransport instead of languageServer
             const extensions = languageServerWithTransport({
@@ -311,7 +307,7 @@ describe("LanguageServer", () => {
             // Manually create the plugin to trigger attachPlugin
             if (viewPluginExt && "create" in viewPluginExt) {
                 // @ts-ignore - We know this is a ViewPlugin
-                viewPluginExt.create(mockView as any);
+                viewPluginExt.create(mockView);
 
                 // Now attachPlugin should have been called
                 expect(mockClient.attachPlugin).toHaveBeenCalled();
@@ -344,8 +340,15 @@ describe("exports", () => {
         expect(Object.keys(exports).sort()).toMatchInlineSnapshot(`
           [
             "LanguageServerClient",
+            "LanguageServerPlugin",
+            "codeActionsEnabled",
+            "completionEnabled",
+            "definitionEnabled",
+            "diagnosticsEnabled",
+            "hoverEnabled",
             "languageServer",
             "languageServerWithTransport",
+            "renameEnabled",
           ]
         `);
     });

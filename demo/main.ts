@@ -208,7 +208,7 @@ const state = EditorState.create({
 
 const view = new EditorView({
     state,
-    parent: document.querySelector("#editor"),
+    parent: document.querySelector("#editor") as Element,
 });
 
 // Set up diagnostic buttons

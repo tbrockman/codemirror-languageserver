@@ -1,6 +1,5 @@
 import { autocompletion, insertCompletionText } from "@codemirror/autocomplete";
 import { type Action, type Diagnostic, setDiagnostics } from "@codemirror/lint";
-import { Facet } from "@codemirror/state";
 import {
     EditorView,
     type Tooltip,
@@ -28,6 +27,17 @@ import type { Transport } from "@open-rpc/client-js/build/transports/Transport.j
 import type { PublishDiagnosticsParams } from "vscode-languageserver-protocol";
 import type * as LSP from "vscode-languageserver-protocol";
 import {
+    codeActionsEnabled,
+    completionEnabled,
+    definitionEnabled,
+    diagnosticsEnabled,
+    documentUri,
+    hoverEnabled,
+    languageId,
+    languageServerClient,
+    renameEnabled,
+} from "./config.js";
+import {
     formatContents,
     isLSPTextEdit,
     offsetToPos,
@@ -37,21 +47,12 @@ import {
     showErrorMessage,
 } from "./utils.js";
 
-const timeout = 10000;
-const changesDelay = 500;
+const TIMEOUT = 10000;
+const CHANGES_DELAY = 500;
 
 const CompletionItemKindMap = Object.fromEntries(
     Object.entries(CompletionItemKind).map(([key, value]) => [value, key]),
 ) as Record<CompletionItemKind, string>;
-
-// biome-ignore lint/style/noNonNullAssertion: <explanation>
-const useLast = <T>(values: readonly T[]): T => values.at(-1)!;
-
-const client = Facet.define<LanguageServerClient, LanguageServerClient>({
-    combine: useLast,
-});
-const documentUri = Facet.define<string, string>({ combine: useLast });
-const languageId = Facet.define<string, string>({ combine: useLast });
 
 const logger = console.log;
 
@@ -258,7 +259,7 @@ export class LanguageServerClient {
         const { capabilities } = await this.request(
             "initialize",
             this.getInitializationOptions(),
-            timeout * 3,
+            TIMEOUT * 3,
         );
         this.capabilities = capabilities;
         this.notify("initialized", {});
@@ -278,34 +279,34 @@ export class LanguageServerClient {
     }
 
     public async textDocumentHover(params: LSP.HoverParams) {
-        return await this.request("textDocument/hover", params, timeout);
+        return await this.request("textDocument/hover", params, TIMEOUT);
     }
 
     public async textDocumentCompletion(params: LSP.CompletionParams) {
-        return await this.request("textDocument/completion", params, timeout);
+        return await this.request("textDocument/completion", params, TIMEOUT);
     }
 
     public async completionItemResolve(item: LSP.CompletionItem) {
-        return await this.request("completionItem/resolve", item, timeout);
+        return await this.request("completionItem/resolve", item, TIMEOUT);
     }
 
     public async textDocumentDefinition(params: LSP.DefinitionParams) {
-        return await this.request("textDocument/definition", params, timeout);
+        return await this.request("textDocument/definition", params, TIMEOUT);
     }
 
     public async textDocumentCodeAction(params: LSP.CodeActionParams) {
-        return await this.request("textDocument/codeAction", params, timeout);
+        return await this.request("textDocument/codeAction", params, TIMEOUT);
     }
 
     public async textDocumentRename(params: LSP.RenameParams) {
-        return await this.request("textDocument/rename", params, timeout);
+        return await this.request("textDocument/rename", params, TIMEOUT);
     }
 
     public async textDocumentPrepareRename(params: LSP.PrepareRenameParams) {
         return await this.request(
             "textDocument/prepareRename",
             params,
-            timeout,
+            TIMEOUT,
         );
     }
 
@@ -381,7 +382,7 @@ export class LanguageServerPlugin implements PluginValue {
             this.sendChange({
                 documentText: this.view.state.doc.toString(),
             });
-        }, changesDelay);
+        }, CHANGES_DELAY);
     }
 
     public destroy() {
@@ -427,6 +428,11 @@ export class LanguageServerPlugin implements PluginValue {
         view: EditorView,
         { line, character }: { line: number; character: number },
     ): Promise<Tooltip | null> {
+        // Check if hover is enabled
+        if (!view.state.facet(hoverEnabled)) {
+            return null;
+        }
+
         if (!(this.client.ready && this.client.capabilities?.hoverProvider)) {
             return null;
         }
@@ -475,6 +481,11 @@ export class LanguageServerPlugin implements PluginValue {
             triggerCharacter: string | undefined;
         },
     ): Promise<CompletionResult | null> {
+        // Check if completion is enabled
+        if (!context.state.facet(completionEnabled)) {
+            return null;
+        }
+
         if (
             !(this.client.ready && this.client.capabilities?.completionProvider)
         ) {
@@ -674,9 +685,14 @@ export class LanguageServerPlugin implements PluginValue {
     }
 
     public async requestDefinition(
-        _view: EditorView,
+        view: EditorView,
         { line, character }: { line: number; character: number },
     ) {
+        // Check if definition is enabled
+        if (!view.state.facet(definitionEnabled)) {
+            return;
+        }
+
         if (
             !(this.client.ready && this.client.capabilities?.definitionProvider)
         ) {
@@ -712,14 +728,11 @@ export class LanguageServerPlugin implements PluginValue {
 
         // If it's the same document, update the selection
         if (!isExternalDocument) {
-            this.view.dispatch(
-                this.view.state.update({
+            view.dispatch(
+                view.state.update({
                     selection: {
-                        anchor: posToOffsetOrZero(
-                            this.view.state.doc,
-                            range.start,
-                        ),
-                        head: posToOffset(this.view.state.doc, range.end),
+                        anchor: posToOffsetOrZero(view.state.doc, range.start),
+                        head: posToOffset(view.state.doc, range.end),
                     },
                 }),
             );
@@ -745,6 +758,14 @@ export class LanguageServerPlugin implements PluginValue {
 
     public async processDiagnostics(params: PublishDiagnosticsParams) {
         if (params.uri !== this.documentUri) {
+            return;
+        }
+
+        // Check if diagnostics are enabled
+        const diagEnabled = this.view.state.facet(diagnosticsEnabled);
+        if (!diagEnabled) {
+            // Clear any existing diagnostics if disabled
+            this.view.dispatch(setDiagnostics(this.view.state, []));
             return;
         }
 
@@ -830,6 +851,11 @@ export class LanguageServerPlugin implements PluginValue {
         range: LSP.Range,
         diagnosticCodes: string[],
     ): Promise<(LSP.Command | LSP.CodeAction)[] | null> {
+        // Check if code actions are enabled
+        if (!this.view.state.facet(codeActionsEnabled)) {
+            return null;
+        }
+
         if (
             !(this.client.ready && this.client.capabilities?.codeActionProvider)
         ) {
@@ -856,6 +882,11 @@ export class LanguageServerPlugin implements PluginValue {
         view: EditorView,
         { line, character }: { line: number; character: number },
     ) {
+        // Check if rename is enabled
+        if (!view.state.facet(renameEnabled)) {
+            return;
+        }
+
         if (!this.client.ready) {
             showErrorMessage(view, "Language server not ready");
             return;
@@ -1130,44 +1161,101 @@ export class LanguageServerPlugin implements PluginValue {
         return false;
     }
 }
-
+/**
+ * Base options for language server integration
+ */
 interface LanguageServerBaseOptions {
+    /** The root URI of the workspace, used for LSP initialization */
     rootUri: string;
+    /** List of workspace folders to send to the language server */
     workspaceFolders: LSP.WorkspaceFolder[] | null;
-    documentUri: string;
-    languageId: string;
 }
 
+/**
+ * Options for configuring the language server client
+ */
 interface LanguageServerClientOptions extends LanguageServerBaseOptions {
+    /** Transport mechanism for communicating with the language server */
     transport: Transport;
+    /** Whether to automatically close the connection when the editor is destroyed */
     autoClose?: boolean;
+    /**
+     * Client capabilities to send to the server during initialization.
+     * Can be an object or a function that modifies the default capabilities.
+     */
     capabilities?:
         | LSP.InitializeParams["capabilities"]
         | ((
               defaultCapabilities: LSP.InitializeParams["capabilities"],
           ) => LSP.InitializeParams["capabilities"]);
+    /** Additional initialization options to send to the language server */
     initializationOptions?: LSP.InitializeParams["initializationOptions"];
 }
 
+/**
+ * Keyboard shortcut configuration for LSP features
+ */
 interface KeyboardShortcuts {
+    /** Keyboard shortcut for rename operations (default: F2) */
     rename?: string;
+    /** Keyboard shortcut for go to definition (default: Ctrl/Cmd+Click) */
     goToDefinition?: string;
 }
 
+/**
+ * Result of a definition lookup operation
+ */
 interface DefinitionResult {
+    /** URI of the target document containing the definition */
     uri: string;
+    /** Range in the document where the definition is located */
     range: LSP.Range;
+    /** Whether the definition is in a different file than the current document */
     isExternalDocument: boolean;
 }
 
+/**
+ * Complete options for configuring the language server integration
+ */
 interface LanguageServerOptions extends LanguageServerClientOptions {
+    /** Optional pre-configured language server client instance */
     client?: LanguageServerClient;
+    /** Whether to allow HTML content in hover tooltips and other UI elements */
     allowHTMLContent?: boolean;
+    /** URI of the current document being edited */
+    documentUri?: string;
+    /** Language identifier (e.g., 'typescript', 'javascript', etc.) */
+    languageId?: string;
+    /** Configuration for keyboard shortcuts */
     keyboardShortcuts?: KeyboardShortcuts;
+    /** Callback triggered when a go-to-definition action is performed */
     onGoToDefinition?: (result: DefinitionResult) => void;
+
+    // Feature toggle options
+
+    /** Whether to enable diagnostic messages (default: true) */
+    diagnosticsEnabled?: boolean;
+    /** Whether to enable hover tooltips (default: true) */
+    hoverEnabled?: boolean;
+    /** Whether to enable code completion (default: true) */
+    completionEnabled?: boolean;
+    /** Whether to enable go-to-definition (default: true) */
+    definitionEnabled?: boolean;
+    /** Whether to enable rename functionality (default: true) */
+    renameEnabled?: boolean;
+    /** Whether to enable code actions (default: true) */
+    codeActionsEnabled?: boolean;
 }
 
+/**
+ * Options for connecting to a language server via WebSocket
+ */
 interface LanguageServerWebsocketOptions extends LanguageServerBaseOptions {
+    /** URI of the current document being edited */
+    documentUri?: string;
+    /** Language identifier (e.g., 'typescript', 'javascript', etc.) */
+    languageId?: string;
+    /** WebSocket URI for connecting to the language server */
     serverUri: `ws://${string}` | `wss://${string}`;
 }
 
@@ -1191,68 +1279,120 @@ export function languageServerWithTransport(options: LanguageServerOptions) {
         options.client ||
         new LanguageServerClient({ ...options, autoClose: true });
 
-    return [
-        client.of(lsClient),
-        documentUri.of(options.documentUri),
-        languageId.of(options.languageId),
+    const {
+        diagnosticsEnabled: isDiagnosticsEnabled = true,
+        hoverEnabled: isHoverEnabled = true,
+        completionEnabled: isCompletionEnabled = true,
+        definitionEnabled: isDefinitionEnabled = true,
+        renameEnabled: isRenameEnabled = true,
+        codeActionsEnabled: isCodeActionsEnabled = true,
+    } = options;
+
+    // Extract feature toggles from options
+    const featureToggles = [
+        // Default all features to true if not specified
+        diagnosticsEnabled.of(isDiagnosticsEnabled),
+        hoverEnabled.of(isHoverEnabled),
+        completionEnabled.of(isCompletionEnabled),
+        definitionEnabled.of(isDefinitionEnabled),
+        renameEnabled.of(isRenameEnabled),
+        codeActionsEnabled.of(isCodeActionsEnabled),
+    ];
+
+    // Create base extensions array
+    const extensions = [
+        languageServerClient.of(lsClient),
+        // Add all the feature toggle facets
+        ...featureToggles,
         ViewPlugin.define((view) => {
             plugin = new LanguageServerPlugin(
                 lsClient,
-                options.documentUri,
-                options.languageId,
+                view.state.facet(documentUri),
+                view.state.facet(languageId),
                 view,
                 options.allowHTMLContent,
                 options.onGoToDefinition,
             );
             return plugin;
         }),
-        hoverTooltip(
-            (view, pos) =>
-                plugin?.requestHoverTooltip(
+    ];
+
+    // Can be added externally, if depends on other facets
+    if (options.documentUri) {
+        extensions.push(documentUri.of(options.documentUri));
+    }
+
+    // Can be added externally, if depends on other facets
+    if (options.languageId) {
+        extensions.push(languageId.of(options.languageId));
+    }
+
+    // Only add hover tooltip if enabled
+    if (isHoverEnabled) {
+        extensions.push(
+            hoverTooltip((view, pos) => {
+                if (plugin == null) {
+                    return null;
+                }
+                return plugin.requestHoverTooltip(
                     view,
                     offsetToPos(view.state.doc, pos),
-                ) ?? null,
-        ),
-        autocompletion({
-            override: [
-                async (context) => {
-                    if (plugin == null) {
-                        return null;
-                    }
+                );
+            }),
+        );
+    }
 
-                    const { state, pos, explicit } = context;
-                    const line = state.doc.lineAt(pos);
-                    let trigKind: CompletionTriggerKind =
-                        CompletionTriggerKind.Invoked;
-                    let trigChar: string | undefined;
-                    if (
-                        !explicit &&
-                        plugin.client.capabilities?.completionProvider?.triggerCharacters?.includes(
-                            line.text[pos - line.from - 1] || "",
-                        )
-                    ) {
-                        trigKind = CompletionTriggerKind.TriggerCharacter;
-                        trigChar = line.text[pos - line.from - 1];
-                    }
-                    if (
-                        trigKind === CompletionTriggerKind.Invoked &&
-                        !context.matchBefore(/\w+$/)
-                    ) {
-                        return null;
-                    }
-                    return await plugin.requestCompletion(
-                        context,
-                        offsetToPos(state.doc, pos),
-                        {
-                            triggerCharacter: trigChar,
-                            triggerKind: trigKind,
-                        },
-                    );
-                },
-            ],
-        }),
+    // Only add autocompletion if enabled
+    if (isCompletionEnabled) {
+        extensions.push(
+            autocompletion({
+                override: [
+                    async (context) => {
+                        if (plugin == null) {
+                            return null;
+                        }
+
+                        const { state, pos, explicit } = context;
+                        const line = state.doc.lineAt(pos);
+                        let trigKind: CompletionTriggerKind =
+                            CompletionTriggerKind.Invoked;
+                        let trigChar: string | undefined;
+                        if (
+                            !explicit &&
+                            plugin.client.capabilities?.completionProvider?.triggerCharacters?.includes(
+                                line.text[pos - line.from - 1] || "",
+                            )
+                        ) {
+                            trigKind = CompletionTriggerKind.TriggerCharacter;
+                            trigChar = line.text[pos - line.from - 1];
+                        }
+                        if (
+                            trigKind === CompletionTriggerKind.Invoked &&
+                            !context.matchBefore(/\w+$/)
+                        ) {
+                            return null;
+                        }
+                        return await plugin.requestCompletion(
+                            context,
+                            offsetToPos(state.doc, pos),
+                            {
+                                triggerCharacter: trigChar,
+                                triggerKind: trigKind,
+                            },
+                        );
+                    },
+                ],
+            }),
+        );
+    }
+
+    // Add event handlers for rename and go to definition
+    extensions.push(
         EditorView.domEventHandlers({
             click: (event, view) => {
+                // Check if definition is enabled
+                if (!view.state.facet(definitionEnabled)) return;
+
                 if (
                     shortcuts.goToDefinition === "ctrlcmd" &&
                     (event.ctrlKey || event.metaKey)
@@ -1279,17 +1419,26 @@ export function languageServerWithTransport(options: LanguageServerOptions) {
             },
             keydown: (event, view) => {
                 if (event.key === shortcuts.rename && plugin) {
+                    // Check if rename is enabled
+                    if (!view.state.facet(renameEnabled)) return;
+
                     const pos = view.state.selection.main.head;
                     plugin.requestRename(
                         view,
                         offsetToPos(view.state.doc, pos),
                     );
                     event.preventDefault();
-                } else if (
+                    return true;
+                }
+
+                if (
                     shortcuts.goToDefinition !== "ctrlcmd" &&
                     event.key === shortcuts.goToDefinition &&
                     plugin
                 ) {
+                    // Check if definition is enabled
+                    if (!view.state.facet(definitionEnabled)) return;
+
                     const pos = view.state.selection.main.head;
                     plugin
                         .requestDefinition(
@@ -1303,8 +1452,11 @@ export function languageServerWithTransport(options: LanguageServerOptions) {
                             ),
                         );
                     event.preventDefault();
+                    return true;
                 }
             },
         }),
-    ];
+    );
+
+    return extensions;
 }

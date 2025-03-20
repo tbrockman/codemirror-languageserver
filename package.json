@@ -6,9 +6,7 @@
     "sideEffects": false,
     "version": "1.13.8",
     "description": "Language Server Plugin for CodeMirror 6",
-    "files": [
-        "dist"
-    ],
+    "files": ["dist"],
     "exports": {
         "./package.json": "./package.json",
         ".": {

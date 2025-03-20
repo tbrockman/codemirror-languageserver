@@ -1,3 +1,5 @@
+import { EditorState } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
 import { Transport } from "@open-rpc/client-js/build/transports/Transport";
 import { describe, expect, it, vi } from "vitest";
 import type {
@@ -5,8 +7,6 @@ import type {
     WorkspaceEdit,
 } from "vscode-languageserver-protocol";
 import { LanguageServerClient } from "../plugin";
-import { EditorState } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
 import { LanguageServerPlugin } from "../plugin";
 class MockTransport extends Transport {
     sendData = vi.fn().mockResolvedValue({});
@@ -329,39 +329,36 @@ it("applies rename the whole cell", async () => {
         transport,
         rootUri: "file:///root",
         workspaceFolders: [{ uri: "file:///root", name: "root" }],
-        documentUri: "file:///root/file.ts",
         languageId: "typescript",
     });
 
     // Mock the client's methods for rename
     // biome-ignore lint/suspicious/noExplicitAny: tests
-    (client as any).client.request = vi
-        .fn()
-        .mockImplementation((request: any) => {
-            if (request.method === "textDocument/rename") {
-                return Promise.resolve<WorkspaceEdit>({
-                    documentChanges: [
-                        {
-                            textDocument: {
-                                uri: "file:///root/file.ts",
-                                version: 1,
-                            },
-                            edits: [
-                                {
-                                    range: {
-                                        start: { line: 0, character: 0 },
-                                        end: { line: 3, character: 0 },
-                                    },
-                                    newText:
-                                        "function newName() {\n  return newName();\n}",
-                                },
-                            ],
+    (client as any).client.request = vi.fn().mockImplementation((request) => {
+        if (request.method === "textDocument/rename") {
+            return Promise.resolve<WorkspaceEdit>({
+                documentChanges: [
+                    {
+                        textDocument: {
+                            uri: "file:///root/file.ts",
+                            version: 1,
                         },
-                    ],
-                });
-            }
-            return Promise.resolve({});
-        });
+                        edits: [
+                            {
+                                range: {
+                                    start: { line: 0, character: 0 },
+                                    end: { line: 3, character: 0 },
+                                },
+                                newText:
+                                    "function newName() {\n  return newName();\n}",
+                            },
+                        ],
+                    },
+                ],
+            });
+        }
+        return Promise.resolve({});
+    });
 
     // Create a mock plugin with access to the rename functionality
     const mockPlugin = new LanguageServerPlugin(
