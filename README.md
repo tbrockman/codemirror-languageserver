@@ -89,13 +89,13 @@ const client = new LanguageServerClient({
 });
 
 // Use in multiple editors
-const ls1 = languageServer({
+const ls1 = languageServerWithClient({
   client,
   documentUri: 'file:///file1.ts',
   languageId: 'typescript'
 });
 
-const ls2 = languageServer({
+const ls2 = languageServerWithClient({
   client,
   documentUri: 'file:///file2.ts',
   languageId: 'typescript'

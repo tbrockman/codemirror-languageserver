@@ -68,8 +68,6 @@ describe("LanguageServerClient initialization options", () => {
             transport,
             rootUri: "file:///root",
             workspaceFolders: [{ uri: "file:///root", name: "root" }],
-            documentUri: "file:///root/file.ts",
-            languageId: "typescript",
             capabilities: (defaultCaps) => ({
                 ...defaultCaps,
                 textDocument: {
@@ -105,8 +103,6 @@ describe("LanguageServerClient initialization options", () => {
             transport,
             rootUri: "file:///root",
             workspaceFolders: [{ uri: "file:///root", name: "root" }],
-            documentUri: "file:///root/file.ts",
-            languageId: "typescript",
             initializationOptions: customInitOptions,
         });
 
@@ -122,8 +118,6 @@ it("handles rename preparation and execution", async () => {
         transport,
         rootUri: "file:///root",
         workspaceFolders: [{ uri: "file:///root", name: "root" }],
-        documentUri: "file:///root/file.ts",
-        languageId: "typescript",
     });
 
     // Mock the client's methods for rename
@@ -247,8 +241,6 @@ it("applies rename changes correctly to a document", async () => {
         transport,
         rootUri: "file:///root",
         workspaceFolders: [{ uri: "file:///root", name: "root" }],
-        documentUri: "file:///root/file.ts",
-        languageId: "typescript",
     });
 
     // Mock the client's methods for rename
@@ -329,7 +321,6 @@ it("applies rename the whole cell", async () => {
         transport,
         rootUri: "file:///root",
         workspaceFolders: [{ uri: "file:///root", name: "root" }],
-        languageId: "typescript",
     });
 
     // Mock the client's methods for rename

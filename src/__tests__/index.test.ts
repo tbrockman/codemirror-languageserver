@@ -6,7 +6,7 @@ import type { CompletionItem } from "vscode-languageserver-protocol";
 import {
     LanguageServerClient,
     languageServer,
-    languageServerWithTransport,
+    languageServerWithClient,
 } from "../plugin";
 import { offsetToPos, posToOffset } from "../utils";
 
@@ -197,15 +197,12 @@ describe("LanguageServer", () => {
                 }),
             });
 
-            // We need to use languageServerWithTransport instead of languageServer
+            // We need to use languageServerWithClient instead of languageServer
             // because languageServer expects a WebSocket URI and creates a new client
-            const extensions = languageServerWithTransport({
-                rootUri: "file:///test",
-                workspaceFolders: [{ uri: "file:///test", name: "test" }],
+            const extensions = languageServerWithClient({
+                client: mockClient as unknown as LanguageServerClient,
                 documentUri: "file:///test/file.ts",
                 languageId: "typescript",
-                transport: new WebSocketTransport("ws://test"),
-                client: mockClient as unknown as LanguageServerClient,
                 onGoToDefinition: onDefinitionSpy,
             });
 
@@ -284,14 +281,11 @@ describe("LanguageServer", () => {
                 }),
             });
 
-            // We need to use languageServerWithTransport instead of languageServer
-            const extensions = languageServerWithTransport({
-                rootUri: "file:///test",
-                workspaceFolders: [{ uri: "file:///test", name: "test" }],
+            // We need to use languageServerWithClient instead of languageServer
+            const extensions = languageServerWithClient({
+                client: mockClient as unknown as LanguageServerClient,
                 documentUri: documentUri,
                 languageId: "typescript",
-                transport: new WebSocketTransport("ws://test"),
-                client: mockClient as unknown as LanguageServerClient,
                 onGoToDefinition: onDefinitionSpy,
             });
 
@@ -350,7 +344,7 @@ describe("exports", () => {
             "languageId",
             "languageServer",
             "languageServerClient",
-            "languageServerWithTransport",
+            "languageServerWithClient",
             "renameEnabled",
           ]
         `);

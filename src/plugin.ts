@@ -639,6 +639,10 @@ export class LanguageServerPlugin implements PluginValue {
                         const dom = document.createElement("div");
                         dom.classList.add("documentation");
                         const content = resolved.documentation || documentation;
+                        if (!content) {
+                            return null;
+                        }
+
                         if (this.allowHTMLContent) {
                             dom.innerHTML = formatContents(content);
                         } else {
@@ -1161,20 +1165,15 @@ export class LanguageServerPlugin implements PluginValue {
         return false;
     }
 }
-/**
- * Base options for language server integration
- */
-interface LanguageServerBaseOptions {
-    /** The root URI of the workspace, used for LSP initialization */
-    rootUri: string;
-    /** List of workspace folders to send to the language server */
-    workspaceFolders: LSP.WorkspaceFolder[] | null;
-}
 
 /**
  * Options for configuring the language server client
  */
-interface LanguageServerClientOptions extends LanguageServerBaseOptions {
+interface LanguageServerClientOptions {
+    /** The root URI of the workspace, used for LSP initialization */
+    rootUri: string;
+    /** List of workspace folders to send to the language server */
+    workspaceFolders: LSP.WorkspaceFolder[] | null;
     /** Transport mechanism for communicating with the language server */
     transport: Transport;
     /** Whether to automatically close the connection when the editor is destroyed */
@@ -1217,9 +1216,9 @@ interface DefinitionResult {
 /**
  * Complete options for configuring the language server integration
  */
-interface LanguageServerOptions extends LanguageServerClientOptions {
-    /** Optional pre-configured language server client instance */
-    client?: LanguageServerClient;
+interface LanguageServerOptions {
+    /** Pre-configured language server client instance or options */
+    client: LanguageServerClient;
     /** Whether to allow HTML content in hover tooltips and other UI elements */
     allowHTMLContent?: boolean;
     /** URI of the current document being edited. If not provided, must be passed via the documentUri facet. */
@@ -1250,24 +1249,26 @@ interface LanguageServerOptions extends LanguageServerClientOptions {
 /**
  * Options for connecting to a language server via WebSocket
  */
-interface LanguageServerWebsocketOptions extends LanguageServerBaseOptions {
-    /** URI of the current document being edited */
-    documentUri?: string;
-    /** Language identifier (e.g., 'typescript', 'javascript', etc.) */
-    languageId?: string;
+interface LanguageServerWebsocketOptions
+    extends Omit<LanguageServerOptions, "client">,
+        Omit<LanguageServerClientOptions, "transport"> {
     /** WebSocket URI for connecting to the language server */
     serverUri: `ws://${string}` | `wss://${string}`;
 }
 
 export function languageServer(options: LanguageServerWebsocketOptions) {
     const { serverUri, ...rest } = options;
-    return languageServerWithTransport({
+    return languageServerWithClient({
         ...rest,
-        transport: new WebSocketTransport(serverUri),
+        client: new LanguageServerClient({
+            ...options,
+            transport: new WebSocketTransport(serverUri),
+            autoClose: true,
+        }),
     });
 }
 
-export function languageServerWithTransport(options: LanguageServerOptions) {
+export function languageServerWithClient(options: LanguageServerOptions) {
     let plugin: LanguageServerPlugin | null = null;
     const shortcuts = {
         rename: "F2",
@@ -1275,9 +1276,7 @@ export function languageServerWithTransport(options: LanguageServerOptions) {
         ...options.keyboardShortcuts,
     };
 
-    const lsClient =
-        options.client ||
-        new LanguageServerClient({ ...options, autoClose: true });
+    const lsClient = options.client;
 
     const {
         diagnosticsEnabled: isDiagnosticsEnabled = true,

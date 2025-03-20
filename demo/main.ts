@@ -10,7 +10,7 @@ import type {
 } from "@open-rpc/client-js/build/Request";
 import { Transport } from "@open-rpc/client-js/build/transports/Transport";
 import { basicSetup } from "codemirror";
-import { languageServerWithTransport } from "../src";
+import { LanguageServerClient, languageServerWithClient } from "../src";
 import { MockLSPServer } from "./mockLSP";
 
 // Create mock WebSocket transport
@@ -192,13 +192,15 @@ const state = EditorState.create({
             position: "absolute",
         }),
         lintGutter(),
-        languageServerWithTransport({
-            rootUri: "file:///",
-            workspaceFolders: [],
+        languageServerWithClient({
+            client: new LanguageServerClient({
+                rootUri: "file:///",
+                workspaceFolders: [],
+                transport: mockTransport,
+            }),
             allowHTMLContent: true,
             documentUri: "file:///example.ts",
             languageId: "typescript",
-            transport: mockTransport,
             onGoToDefinition: (result) => {
                 console.log("Go to definition", result);
             },

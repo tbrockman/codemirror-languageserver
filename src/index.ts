@@ -1,7 +1,7 @@
 export {
     LanguageServerClient,
     LanguageServerPlugin,
-    languageServerWithTransport,
+    languageServerWithClient,
     languageServer,
 } from "./plugin.js";
 
