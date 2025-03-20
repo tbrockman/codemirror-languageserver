@@ -1222,9 +1222,9 @@ interface LanguageServerOptions extends LanguageServerClientOptions {
     client?: LanguageServerClient;
     /** Whether to allow HTML content in hover tooltips and other UI elements */
     allowHTMLContent?: boolean;
-    /** URI of the current document being edited */
+    /** URI of the current document being edited. If not provided, must be passed via the documentUri facet. */
     documentUri?: string;
-    /** Language identifier (e.g., 'typescript', 'javascript', etc.) */
+    /** Language identifier (e.g., 'typescript', 'javascript', etc.). If not provided, must be passed via the languageId facet. */
     languageId?: string;
     /** Configuration for keyboard shortcuts */
     keyboardShortcuts?: KeyboardShortcuts;

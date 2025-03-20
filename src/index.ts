@@ -12,4 +12,7 @@ export {
     codeActionsEnabled,
     definitionEnabled,
     renameEnabled,
+    languageId,
+    documentUri,
+    languageServerClient,
 } from "./config.js";

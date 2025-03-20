@@ -402,8 +402,6 @@ it("handles prepareRenameFallback", async () => {
         transport,
         rootUri: "file:///root",
         workspaceFolders: [{ uri: "file:///root", name: "root" }],
-        documentUri: "file:///root/file.ts",
-        languageId: "typescript",
     });
 
     const plugin = new LanguageServerPlugin(
