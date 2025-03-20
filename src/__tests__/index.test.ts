@@ -345,8 +345,11 @@ describe("exports", () => {
             "completionEnabled",
             "definitionEnabled",
             "diagnosticsEnabled",
+            "documentUri",
             "hoverEnabled",
+            "languageId",
             "languageServer",
+            "languageServerClient",
             "languageServerWithTransport",
             "renameEnabled",
           ]

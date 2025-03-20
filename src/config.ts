@@ -37,12 +37,17 @@ function allTrue(values: readonly boolean[]): boolean {
 }
 
 export function createUseLastOrThrow(message: string) {
+    const fallback = new Proxy(
+        {},
+        {
+            get() {
+                throw new Error(message);
+            },
+        },
+    );
+
     return function useLastOrThrow<T>(values: readonly T[]): T {
-        // if (values.length === 0) {
-        //     throw new Error(message);
-        // }
-        // biome-ignore lint/style/noNonNullAssertion: <explanation>
-        return values.at(-1)!;
+        return values.at(-1) ?? (fallback as T);
     };
 }
 
