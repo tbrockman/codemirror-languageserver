@@ -86,6 +86,15 @@ class MockWebSocket {
                 .codeAction(anyParams)
                 .then((result) => this.respond(id, result));
         }
+        /**
+         * Handle signature help requests from the editor
+         * Returns parameter information when typing function calls
+         */
+        if (method === "textDocument/signatureHelp") {
+            return this.server
+                .signatureHelp(anyParams)
+                .then((result) => this.respond(id, result));
+        }
     }
 
     addEventListener(

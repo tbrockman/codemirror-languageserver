@@ -36,6 +36,7 @@ import {
     languageId,
     languageServerClient,
     renameEnabled,
+    signatureHelpEnabled,
 } from "./config.js";
 import {
     formatContents,
@@ -79,6 +80,10 @@ interface LSPRequestMap {
     "textDocument/prepareRename": [
         LSP.PrepareRenameParams,
         LSP.Range | LSP.PrepareRenameResult | null,
+    ];
+    "textDocument/signatureHelp": [
+        LSP.SignatureHelpParams,
+        LSP.SignatureHelp | null,
     ];
 }
 
@@ -305,6 +310,14 @@ export class LanguageServerClient {
     public async textDocumentPrepareRename(params: LSP.PrepareRenameParams) {
         return await this.request(
             "textDocument/prepareRename",
+            params,
+            TIMEOUT,
+        );
+    }
+
+    public async textDocumentSignatureHelp(params: LSP.SignatureHelpParams) {
+        return await this.request(
+            "textDocument/signatureHelp",
             params,
             TIMEOUT,
         );
@@ -1018,6 +1031,245 @@ export class LanguageServerPlugin implements PluginValue {
     }
 
     /**
+     * Request signature help from the language server
+     * @param view The editor view
+     * @param position The cursor position
+     * @returns A tooltip with the signature help information or null if not available
+     */
+    public async requestSignatureHelp(
+        view: EditorView,
+        {
+            line,
+            character,
+        }: {
+            line: number;
+            character: number;
+        },
+        triggerCharacter: string | undefined = undefined,
+    ): Promise<Tooltip | null> {
+        // Check if signature help is enabled
+        if (
+            !(
+                view.state.facet(signatureHelpEnabled) &&
+                this.client.ready &&
+                this.client.capabilities?.signatureHelpProvider
+            )
+        ) {
+            return null;
+        }
+
+        try {
+            // Send the current document state
+            this.sendChange({ documentText: view.state.doc.toString() });
+
+            // Request signature help
+            const result = await this.client.textDocumentSignatureHelp({
+                textDocument: { uri: this.documentUri },
+                position: { line, character },
+                context: {
+                    isRetrigger: false,
+                    triggerKind: 1, // Invoked
+                    triggerCharacter,
+                },
+            });
+
+            if (!result?.signatures || result.signatures.length === 0) {
+                return null;
+            }
+
+            // Create the tooltip container
+            const dom = this.createTooltipContainer();
+
+            // Get active signature
+            const activeSignatureIndex = result.activeSignature ?? 0;
+            const activeSignature =
+                result.signatures[activeSignatureIndex] || result.signatures[0];
+
+            if (!activeSignature) {
+                return null;
+            }
+
+            const activeParameterIndex =
+                result.activeParameter ?? activeSignature.activeParameter ?? 0;
+
+            // Create and add signature display element
+            const signatureElement = this.createSignatureElement(
+                activeSignature,
+                activeParameterIndex,
+            );
+            dom.appendChild(signatureElement);
+
+            // Add documentation if available
+            if (activeSignature.documentation) {
+                dom.appendChild(
+                    this.createDocumentationElement(
+                        activeSignature.documentation,
+                    ),
+                );
+            }
+
+            // Add parameter documentation if available
+            const activeParam =
+                activeSignature.parameters?.[activeParameterIndex];
+
+            if (activeParam?.documentation) {
+                dom.appendChild(
+                    this.createParameterDocElement(activeParam.documentation),
+                );
+            }
+
+            // Position tooltip at cursor
+            const pos = posToOffset(view.state.doc, { line, character });
+            if (pos == null) {
+                return null;
+            }
+
+            return {
+                pos,
+                end: pos,
+                create: (_view) => ({ dom }),
+                above: false,
+            };
+        } catch (error) {
+            console.error("Signature help error:", error);
+            return null;
+        }
+    }
+
+    /**
+     * Creates the main tooltip container for signature help
+     */
+    private createTooltipContainer(): HTMLElement {
+        const dom = document.createElement("div");
+        dom.classList.add("cm-signature-help");
+        dom.style.cssText = "padding: 6px; max-width: 400px;";
+        return dom;
+    }
+
+    /**
+     * Creates the signature element with parameter highlighting
+     */
+    private createSignatureElement(
+        signature: LSP.SignatureInformation,
+        activeParameterIndex: number,
+    ): HTMLElement {
+        const signatureElement = document.createElement("div");
+        signatureElement.classList.add("cm-signature");
+        signatureElement.style.cssText =
+            "font-family: monospace; margin-bottom: 4px;";
+
+        if (!signature.label || typeof signature.label !== "string") {
+            signatureElement.textContent = "Signature information unavailable";
+            return signatureElement;
+        }
+
+        const signatureText = signature.label;
+        const parameters = signature.parameters || [];
+
+        // If there are no parameters or no active parameter, just show the signature text
+        if (parameters.length === 0 || !parameters[activeParameterIndex]) {
+            signatureElement.textContent = signatureText;
+            return signatureElement;
+        }
+
+        // Handle parameter highlighting based on the parameter label type
+        const paramLabel = parameters[activeParameterIndex].label;
+
+        if (typeof paramLabel === "string") {
+            // Simple string replacement
+            signatureElement.textContent = signatureText.replace(
+                paramLabel,
+                `«${paramLabel}»`,
+            );
+        } else if (Array.isArray(paramLabel) && paramLabel.length === 2) {
+            // Handle array format [startIndex, endIndex]
+            this.applyRangeHighlighting(
+                signatureElement,
+                signatureText,
+                paramLabel[0],
+                paramLabel[1],
+            );
+        } else {
+            signatureElement.textContent = signatureText;
+        }
+
+        return signatureElement;
+    }
+
+    /**
+     * Applies parameter highlighting using a range approach
+     */
+    private applyRangeHighlighting(
+        element: HTMLElement,
+        text: string,
+        startIndex: number,
+        endIndex: number,
+    ): void {
+        // Clear any existing content
+        element.textContent = "";
+
+        // Split the text into three parts: before, parameter, after
+        const beforeParam = text.substring(0, startIndex);
+        const param = text.substring(startIndex, endIndex);
+        const afterParam = text.substring(endIndex);
+
+        // Add the parts to the element
+        element.appendChild(document.createTextNode(beforeParam));
+
+        const paramSpan = document.createElement("span");
+        paramSpan.classList.add("cm-signature-active-param");
+        paramSpan.style.cssText =
+            "font-weight: bold; text-decoration: underline;";
+        paramSpan.textContent = param;
+        element.appendChild(paramSpan);
+
+        element.appendChild(document.createTextNode(afterParam));
+    }
+
+    /**
+     * Creates the documentation element for signatures
+     */
+    private createDocumentationElement(
+        documentation: string | LSP.MarkupContent,
+    ): HTMLElement {
+        const docsElement = document.createElement("div");
+        docsElement.classList.add("cm-signature-docs");
+        docsElement.style.cssText = "margin-top: 4px; color: #666;";
+
+        const formattedContent = formatContents(documentation);
+
+        if (this.allowHTMLContent) {
+            docsElement.innerHTML = formattedContent;
+        } else {
+            docsElement.textContent = formattedContent;
+        }
+
+        return docsElement;
+    }
+
+    /**
+     * Creates the parameter documentation element
+     */
+    private createParameterDocElement(
+        documentation: string | LSP.MarkupContent,
+    ): HTMLElement {
+        const paramDocsElement = document.createElement("div");
+        paramDocsElement.classList.add("cm-parameter-docs");
+        paramDocsElement.style.cssText =
+            "margin-top: 4px; font-style: italic; border-top: 1px solid #eee; padding-top: 4px;";
+
+        const formattedContent = formatContents(documentation);
+
+        if (this.allowHTMLContent) {
+            paramDocsElement.innerHTML = formattedContent;
+        } else {
+            paramDocsElement.textContent = formattedContent;
+        }
+
+        return paramDocsElement;
+    }
+
+    /**
      * Fallback implementation of prepareRename.
      * We try to find the word at the cursor position and return the range of the word.
      */
@@ -1199,6 +1451,8 @@ interface KeyboardShortcuts {
     rename?: string;
     /** Keyboard shortcut for go to definition (default: Ctrl/Cmd+Click) */
     goToDefinition?: string;
+    /** Keyboard shortcut for signature help (default: Ctrl/Cmd+Shift+Space) */
+    signatureHelp?: string;
 }
 
 /**
@@ -1244,6 +1498,8 @@ interface LanguageServerOptions {
     renameEnabled?: boolean;
     /** Whether to enable code actions (default: true) */
     codeActionsEnabled?: boolean;
+    /** Whether to enable signature help (default: true) */
+    signatureHelpEnabled?: boolean;
 
     /**
      * Configuration for the completion feature.
@@ -1290,6 +1546,7 @@ export function languageServerWithClient(options: LanguageServerOptions) {
     const shortcuts = {
         rename: "F2",
         goToDefinition: "ctrlcmd", // ctrlcmd means Ctrl on Windows/Linux, Cmd on Mac
+        signatureHelp: "ctrlcmdshift.Space", // Ctrl/Cmd+Shift+Space
         ...options.keyboardShortcuts,
     };
 
@@ -1302,6 +1559,7 @@ export function languageServerWithClient(options: LanguageServerOptions) {
         definitionEnabled: isDefinitionEnabled = true,
         renameEnabled: isRenameEnabled = true,
         codeActionsEnabled: isCodeActionsEnabled = true,
+        signatureHelpEnabled: isSignatureHelpEnabled = true,
     } = options;
 
     // Extract feature toggles from options
@@ -1313,6 +1571,7 @@ export function languageServerWithClient(options: LanguageServerOptions) {
         definitionEnabled.of(isDefinitionEnabled),
         renameEnabled.of(isRenameEnabled),
         codeActionsEnabled.of(isCodeActionsEnabled),
+        signatureHelpEnabled.of(isSignatureHelpEnabled),
     ];
 
     // Create base extensions array
@@ -1355,6 +1614,106 @@ export function languageServerWithClient(options: LanguageServerOptions) {
                     offsetToPos(view.state.doc, pos),
                 );
             }, options.hoverConfig),
+        );
+    }
+
+    // Add signature help support if enabled
+    if (isSignatureHelpEnabled) {
+        extensions.push(
+            EditorView.updateListener.of(async (update) => {
+                if (!(plugin && update.docChanged)) return;
+
+                // Early exit if signature help capability is not supported
+                if (!plugin.client.capabilities?.signatureHelpProvider) return;
+
+                const triggerChars = plugin.client.capabilities
+                    .signatureHelpProvider.triggerCharacters || ["(", ","];
+                let triggerCharacter: string | undefined;
+
+                // Check if changes include trigger characters
+                const changes = update.changes;
+                let shouldTrigger = false;
+                let triggerPos = -1;
+
+                changes.iterChanges((_fromA, _toA, _fromB, toB, inserted) => {
+                    if (shouldTrigger) return; // Skip if already found a trigger
+
+                    const text = inserted.toString();
+                    if (!text) return;
+
+                    for (const char of triggerChars) {
+                        if (text.includes(char)) {
+                            shouldTrigger = true;
+                            triggerPos = toB;
+                            triggerCharacter = char;
+                            break;
+                        }
+                    }
+                });
+
+                if (shouldTrigger && triggerPos >= 0) {
+                    const pos = offsetToPos(update.state.doc, triggerPos);
+                    if (pos) {
+                        // Show signature help tooltip
+                        const tooltip = await plugin.requestSignatureHelp(
+                            update.view,
+                            pos,
+                            triggerCharacter,
+                        );
+
+                        if (tooltip) {
+                            // Create and show the tooltip manually
+                            const { pos: tooltipPos, create } = tooltip;
+                            const tooltipView = create(update.view);
+
+                            const tooltipElement =
+                                document.createElement("div");
+                            tooltipElement.className =
+                                "cm-tooltip cm-signature-tooltip";
+                            tooltipElement.style.position = "absolute";
+
+                            tooltipElement.appendChild(tooltipView.dom);
+
+                            // Position the tooltip
+                            const coords = update.view.coordsAtPos(tooltipPos);
+                            if (coords) {
+                                tooltipElement.style.left = `${coords.left}px`;
+                                tooltipElement.style.top = `${coords.bottom + 5}px`;
+
+                                // Add to DOM
+                                document.body.appendChild(tooltipElement);
+
+                                // Remove after a delay or on editor changes
+                                setTimeout(() => {
+                                    tooltipElement.remove();
+                                }, 10000); // Show for 10 seconds
+
+                                // Also remove on any user input
+                                const removeTooltip = () => {
+                                    tooltipElement.remove();
+                                    update.view.dom.removeEventListener(
+                                        "keydown",
+                                        removeTooltip,
+                                    );
+                                    update.view.dom.removeEventListener(
+                                        "mousedown",
+                                        removeTooltip,
+                                    );
+                                };
+
+                                update.view.dom.addEventListener(
+                                    "keydown",
+                                    removeTooltip,
+                                );
+                                update.view.dom.addEventListener(
+                                    "mousedown",
+                                    removeTooltip,
+                                );
+                            }
+                        }
+                    }
+                }
+            }),
         );
     }
 

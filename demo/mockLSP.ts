@@ -59,6 +59,10 @@ export class MockLSPServer {
                 renameProvider: {
                     prepareProvider: true,
                 },
+                signatureHelpProvider: {
+                    triggerCharacters: ["(", ","],
+                    retriggerCharacters: [","],
+                },
             },
         };
     }
@@ -368,6 +372,75 @@ export class MockLSPServer {
         }));
     }
 
+    // Default signature help data that can be reused
+    private defaultSignatureHelpData = {
+        signatures: [
+            {
+                label: "function example(param1: string, param2: number, param3: boolean): void",
+                documentation: {
+                    kind: "markdown",
+                    value: "A demo function that shows signature help capabilities.\n\nThis will display parameter information as you type.",
+                },
+                parameters: [
+                    {
+                        label: "param1: string",
+                        documentation: {
+                            kind: "markdown",
+                            value: "The first parameter - a string value.\n\nExample: `'hello'`",
+                        },
+                    },
+                    {
+                        label: "param2: number",
+                        documentation: {
+                            kind: "markdown",
+                            value: "The second parameter - a numeric value.\n\nExample: `42`",
+                        },
+                    },
+                    {
+                        label: "param3: boolean",
+                        documentation: {
+                            kind: "markdown",
+                            value: "The third parameter - a boolean value.\n\nExample: `true`",
+                        },
+                    },
+                ],
+            },
+            {
+                label: "function example(config: { name: string, value: any }): void",
+                documentation: {
+                    kind: "markdown",
+                    value: "Alternative signature with a configuration object parameter.",
+                },
+                parameters: [
+                    {
+                        label: "config: { name: string, value: any }",
+                        documentation: {
+                            kind: "markdown",
+                            value: "A configuration object with name and value properties.",
+                        },
+                    },
+                ],
+            },
+        ],
+    };
+
+    /**
+     * Provides signature help information for function calls
+     *
+     * @param _params - The signature help parameters from the client
+     * @returns A SignatureHelp object containing information about function signatures
+     */
+    public async signatureHelp(
+        _params: LSP.SignatureHelpParams,
+    ): Promise<LSP.SignatureHelp> {
+        // Return the default signature help data with the default active positions
+        return {
+            ...this.defaultSignatureHelpData,
+            activeSignature: 0,
+            activeParameter: 0,
+        };
+    }
+
     // Helper methods for demo
     public addErrorDiagnostic(uri: string, line: number) {
         this.addDiagnostic(uri, {
@@ -425,6 +498,55 @@ export class MockLSPServer {
                     start: { line: 0, character: 0 },
                     end: { line: 0, character: 5 },
                 },
+            };
+        };
+    }
+
+    /**
+     * Updates the active parameter in signature help
+     *
+     * @param paramIndex - The index of the parameter to make active (0-based)
+     */
+    public setSignatureHelpActiveParameter(paramIndex: number) {
+        this.signatureHelp = async (
+            _params: LSP.SignatureHelpParams,
+        ): Promise<LSP.SignatureHelp> => {
+            return {
+                ...this.defaultSignatureHelpData,
+                activeSignature: 0,
+                activeParameter: Math.min(paramIndex, 2), // Clamp to valid parameter indices
+            };
+        };
+    }
+
+    /**
+     * Updates which signature is active in signature help
+     *
+     * @param signatureIndex - The index of the signature to make active (0-based)
+     */
+    public setActiveSignature(signatureIndex: number) {
+        this.signatureHelp = async (
+            _params: LSP.SignatureHelpParams,
+        ): Promise<LSP.SignatureHelp> => {
+            return {
+                ...this.defaultSignatureHelpData,
+                activeSignature: Math.min(signatureIndex, 1), // Clamp to valid signature indices
+                activeParameter: 0,
+            };
+        };
+    }
+
+    /**
+     * Resets signature help behavior to default
+     */
+    public resetSignatureHelp() {
+        this.signatureHelp = async (
+            _params: LSP.SignatureHelpParams,
+        ): Promise<LSP.SignatureHelp> => {
+            return {
+                ...this.defaultSignatureHelpData,
+                activeSignature: 0,
+                activeParameter: 0,
             };
         };
     }

@@ -27,6 +27,10 @@ export const codeActionsEnabled = Facet.define<boolean, boolean>({
     combine: (values) => allTrue(values),
 });
 
+export const signatureHelpEnabled = Facet.define<boolean, boolean>({
+    combine: (values) => allTrue(values),
+});
+
 function allTrue(values: readonly boolean[]): boolean {
     // If no values are provided, default to true
     if (values.length === 0) {
