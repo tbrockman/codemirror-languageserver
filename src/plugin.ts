@@ -40,6 +40,7 @@ import {
 } from "./config.js";
 import {
     formatContents,
+    isEmptyDocumentation,
     isLSPTextEdit,
     offsetToPos,
     posToOffset,
@@ -468,6 +469,9 @@ export class LanguageServerPlugin implements PluginValue {
         if (pos == null) {
             return null;
         }
+        if (isEmptyDocumentation(contents)) {
+            return null;
+        }
         const dom = document.createElement("div");
         dom.classList.add("documentation");
         if (this.allowHTMLContent) {
@@ -655,7 +659,9 @@ export class LanguageServerPlugin implements PluginValue {
                         if (!content) {
                             return null;
                         }
-
+                        if (isEmptyDocumentation(content)) {
+                            return null;
+                        }
                         if (this.allowHTMLContent) {
                             dom.innerHTML = formatContents(content);
                         } else {
@@ -664,6 +670,9 @@ export class LanguageServerPlugin implements PluginValue {
                         return dom;
                     } catch (e) {
                         console.error("Failed to resolve completion item:", e);
+                        if (isEmptyDocumentation(documentation)) {
+                            return null;
+                        }
                         // Fallback to existing documentation if resolve fails
                         if (documentation) {
                             const dom = document.createElement("div");

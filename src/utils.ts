@@ -136,3 +136,40 @@ export function showErrorMessage(view: EditorView, message: string) {
         setTimeout(() => tooltip.remove(), 200);
     }, 3000);
 }
+
+export function isEmptyDocumentation(
+    documentation:
+        | LSP.MarkupContent
+        | LSP.MarkedString
+        | LSP.MarkedString[]
+        | undefined,
+) {
+    if (documentation == null) {
+        return true;
+    }
+    if (Array.isArray(documentation)) {
+        return (
+            documentation.length === 0 ||
+            documentation.every(isEmptyDocumentation)
+        );
+    }
+    if (typeof documentation === "string") {
+        return isEmptyIshValue(documentation);
+    }
+    const value = documentation.value;
+    if (typeof value === "string") {
+        return isEmptyIshValue(value);
+    }
+    return false;
+}
+
+function isEmptyIshValue(value: unknown) {
+    if (value == null) {
+        return true;
+    }
+    if (typeof value === "string") {
+        // Empty string or string with only whitespace or backticks
+        return value.trim() === "" || /^[\s\n`]*$/.test(value);
+    }
+    return false;
+}
