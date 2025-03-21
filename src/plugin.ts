@@ -26,18 +26,7 @@ import type { PluginValue, ViewUpdate } from "@codemirror/view";
 import type { Transport } from "@open-rpc/client-js/build/transports/Transport.js";
 import type { PublishDiagnosticsParams } from "vscode-languageserver-protocol";
 import type * as LSP from "vscode-languageserver-protocol";
-import {
-    codeActionsEnabled,
-    completionEnabled,
-    definitionEnabled,
-    diagnosticsEnabled,
-    documentUri,
-    hoverEnabled,
-    languageId,
-    languageServerClient,
-    renameEnabled,
-    signatureHelpEnabled,
-} from "./config.js";
+import { documentUri, languageId } from "./config.js";
 import {
     formatContents,
     isEmptyDocumentation,
@@ -48,6 +37,7 @@ import {
     prefixMatch,
     showErrorMessage,
 } from "./utils.js";
+import type { Extension } from "@codemirror/state";
 
 const TIMEOUT = 10000;
 const CHANGES_DELAY = 500;
@@ -364,18 +354,31 @@ export class LanguageServerClient {
 export class LanguageServerPlugin implements PluginValue {
     private documentVersion: number;
     private changesTimeout: number;
-    private onGoToDefinition?: (result: DefinitionResult) => void;
+    public client: LanguageServerClient;
+    public documentUri: string;
+    public languageId: string;
+    public view: EditorView;
+    public allowHTMLContent = false;
+    public featureOptions: Required<FeatureOptions>;
+    public onGoToDefinition: ((result: DefinitionResult) => void) | undefined;
 
     constructor(
-        public client: LanguageServerClient,
-        private documentUri: string,
-        private languageId: string,
-        private view: EditorView,
-        private allowHTMLContent = false,
+        client: LanguageServerClient,
+        documentUri: string,
+        languageId: string,
+        view: EditorView,
+        featureOptions: Required<FeatureOptions>,
+        allowHTMLContent = false,
         onGoToDefinition?: (result: DefinitionResult) => void,
     ) {
         this.documentVersion = 0;
         this.changesTimeout = 0;
+        this.client = client;
+        this.documentUri = documentUri;
+        this.languageId = languageId;
+        this.view = view;
+        this.allowHTMLContent = allowHTMLContent;
+        this.featureOptions = featureOptions;
         this.onGoToDefinition = onGoToDefinition;
 
         this.client.attachPlugin(this);
@@ -443,7 +446,7 @@ export class LanguageServerPlugin implements PluginValue {
         { line, character }: { line: number; character: number },
     ): Promise<Tooltip | null> {
         // Check if hover is enabled
-        if (!view.state.facet(hoverEnabled)) {
+        if (!this.featureOptions.hoverEnabled) {
             return null;
         }
 
@@ -499,7 +502,7 @@ export class LanguageServerPlugin implements PluginValue {
         },
     ): Promise<CompletionResult | null> {
         // Check if completion is enabled
-        if (!context.state.facet(completionEnabled)) {
+        if (!this.featureOptions.completionEnabled) {
             return null;
         }
 
@@ -729,7 +732,7 @@ export class LanguageServerPlugin implements PluginValue {
         { line, character }: { line: number; character: number },
     ) {
         // Check if definition is enabled
-        if (!view.state.facet(definitionEnabled)) {
+        if (!this.featureOptions.definitionEnabled) {
             return;
         }
 
@@ -802,7 +805,7 @@ export class LanguageServerPlugin implements PluginValue {
         }
 
         // Check if diagnostics are enabled
-        const diagEnabled = this.view.state.facet(diagnosticsEnabled);
+        const diagEnabled = this.featureOptions.diagnosticsEnabled;
         if (!diagEnabled) {
             // Clear any existing diagnostics if disabled
             this.view.dispatch(setDiagnostics(this.view.state, []));
@@ -892,7 +895,7 @@ export class LanguageServerPlugin implements PluginValue {
         diagnosticCodes: string[],
     ): Promise<(LSP.Command | LSP.CodeAction)[] | null> {
         // Check if code actions are enabled
-        if (!this.view.state.facet(codeActionsEnabled)) {
+        if (!this.featureOptions.codeActionsEnabled) {
             return null;
         }
 
@@ -923,7 +926,7 @@ export class LanguageServerPlugin implements PluginValue {
         { line, character }: { line: number; character: number },
     ) {
         // Check if rename is enabled
-        if (!view.state.facet(renameEnabled)) {
+        if (!this.featureOptions.renameEnabled) {
             return;
         }
 
@@ -1073,7 +1076,7 @@ export class LanguageServerPlugin implements PluginValue {
         // Check if signature help is enabled
         if (
             !(
-                view.state.facet(signatureHelpEnabled) &&
+                this.featureOptions.signatureHelpEnabled &&
                 this.client.ready &&
                 this.client.capabilities?.signatureHelpProvider
             )
@@ -1490,25 +1493,7 @@ interface DefinitionResult {
     isExternalDocument: boolean;
 }
 
-/**
- * Complete options for configuring the language server integration
- */
-interface LanguageServerOptions {
-    /** Pre-configured language server client instance or options */
-    client: LanguageServerClient;
-    /** Whether to allow HTML content in hover tooltips and other UI elements */
-    allowHTMLContent?: boolean;
-    /** URI of the current document being edited. If not provided, must be passed via the documentUri facet. */
-    documentUri?: string;
-    /** Language identifier (e.g., 'typescript', 'javascript', etc.). If not provided, must be passed via the languageId facet. */
-    languageId?: string;
-    /** Configuration for keyboard shortcuts */
-    keyboardShortcuts?: KeyboardShortcuts;
-    /** Callback triggered when a go-to-definition action is performed */
-    onGoToDefinition?: (result: DefinitionResult) => void;
-
-    // Feature toggle options
-
+export interface FeatureOptions {
     /** Whether to enable diagnostic messages (default: true) */
     diagnosticsEnabled?: boolean;
     /** Whether to enable hover tooltips (default: true) */
@@ -1523,6 +1508,24 @@ interface LanguageServerOptions {
     codeActionsEnabled?: boolean;
     /** Whether to enable signature help (default: true) */
     signatureHelpEnabled?: boolean;
+}
+
+/**
+ * Complete options for configuring the language server integration
+ */
+interface LanguageServerOptions extends FeatureOptions {
+    /** Pre-configured language server client instance or options */
+    client: LanguageServerClient;
+    /** Whether to allow HTML content in hover tooltips and other UI elements */
+    allowHTMLContent?: boolean;
+    /** URI of the current document being edited. If not provided, must be passed via the documentUri facet. */
+    documentUri?: string;
+    /** Language identifier (e.g., 'typescript', 'javascript', etc.). If not provided, must be passed via the languageId facet. */
+    languageId?: string;
+    /** Configuration for keyboard shortcuts */
+    keyboardShortcuts?: KeyboardShortcuts;
+    /** Callback triggered when a go-to-definition action is performed */
+    onGoToDefinition?: (result: DefinitionResult) => void;
 
     /**
      * Configuration for the completion feature.
@@ -1575,58 +1578,37 @@ export function languageServerWithClient(options: LanguageServerOptions) {
 
     const lsClient = options.client;
 
-    const {
-        diagnosticsEnabled: isDiagnosticsEnabled = true,
-        hoverEnabled: isHoverEnabled = true,
-        completionEnabled: isCompletionEnabled = true,
-        definitionEnabled: isDefinitionEnabled = true,
-        renameEnabled: isRenameEnabled = true,
-        codeActionsEnabled: isCodeActionsEnabled = true,
-        signatureHelpEnabled: isSignatureHelpEnabled = true,
-    } = options;
-
-    // Extract feature toggles from options
-    const featureToggles = [
-        // Default all features to true if not specified
-        diagnosticsEnabled.of(isDiagnosticsEnabled),
-        hoverEnabled.of(isHoverEnabled),
-        completionEnabled.of(isCompletionEnabled),
-        definitionEnabled.of(isDefinitionEnabled),
-        renameEnabled.of(isRenameEnabled),
-        codeActionsEnabled.of(isCodeActionsEnabled),
-        signatureHelpEnabled.of(isSignatureHelpEnabled),
-    ];
+    const featuresOptions: Required<FeatureOptions> = {
+        // Default to true
+        diagnosticsEnabled: true,
+        hoverEnabled: true,
+        completionEnabled: true,
+        definitionEnabled: true,
+        renameEnabled: true,
+        codeActionsEnabled: true,
+        signatureHelpEnabled: true,
+        // Override defaults with provided options
+        ...options,
+    };
 
     // Create base extensions array
-    const extensions = [
-        languageServerClient.of(lsClient),
-        // Add all the feature toggle facets
-        ...featureToggles,
+    const extensions: Extension[] = [
         ViewPlugin.define((view) => {
             plugin = new LanguageServerPlugin(
                 lsClient,
-                view.state.facet(documentUri),
-                view.state.facet(languageId),
+                options.documentUri ?? view.state.facet(documentUri),
+                options.languageId ?? view.state.facet(languageId),
                 view,
-                options.allowHTMLContent,
+                featuresOptions,
+                options.allowHTMLContent ?? false,
                 options.onGoToDefinition,
             );
             return plugin;
         }),
     ];
 
-    // Can be added externally, if depends on other facets
-    if (options.documentUri) {
-        extensions.push(documentUri.of(options.documentUri));
-    }
-
-    // Can be added externally, if depends on other facets
-    if (options.languageId) {
-        extensions.push(languageId.of(options.languageId));
-    }
-
     // Only add hover tooltip if enabled
-    if (isHoverEnabled) {
+    if (featuresOptions.hoverEnabled) {
         extensions.push(
             hoverTooltip((view, pos) => {
                 if (plugin == null) {
@@ -1641,7 +1623,7 @@ export function languageServerWithClient(options: LanguageServerOptions) {
     }
 
     // Add signature help support if enabled
-    if (isSignatureHelpEnabled) {
+    if (featuresOptions.signatureHelpEnabled) {
         extensions.push(
             EditorView.updateListener.of(async (update) => {
                 if (!(plugin && update.docChanged)) return;
@@ -1741,7 +1723,7 @@ export function languageServerWithClient(options: LanguageServerOptions) {
     }
 
     // Only add autocompletion if enabled
-    if (isCompletionEnabled) {
+    if (featuresOptions.completionEnabled) {
         extensions.push(
             autocompletion({
                 ...options.completionConfig,
@@ -1792,7 +1774,7 @@ export function languageServerWithClient(options: LanguageServerOptions) {
         EditorView.domEventHandlers({
             click: (event, view) => {
                 // Check if definition is enabled
-                if (!view.state.facet(definitionEnabled)) return;
+                if (!featuresOptions.definitionEnabled) return;
 
                 if (
                     shortcuts.goToDefinition === "ctrlcmd" &&
@@ -1821,7 +1803,7 @@ export function languageServerWithClient(options: LanguageServerOptions) {
             keydown: (event, view) => {
                 if (event.key === shortcuts.rename && plugin) {
                     // Check if rename is enabled
-                    if (!view.state.facet(renameEnabled)) return;
+                    if (!featuresOptions.renameEnabled) return;
 
                     const pos = view.state.selection.main.head;
                     plugin.requestRename(
@@ -1838,7 +1820,7 @@ export function languageServerWithClient(options: LanguageServerOptions) {
                     plugin
                 ) {
                     // Check if definition is enabled
-                    if (!view.state.facet(definitionEnabled)) return;
+                    if (!featuresOptions.definitionEnabled) return;
 
                     const pos = view.state.selection.main.head;
                     plugin

@@ -8,6 +8,8 @@ import type {
 } from "vscode-languageserver-protocol";
 import { LanguageServerClient } from "../plugin";
 import { LanguageServerPlugin } from "../plugin";
+import type { FeatureOptions } from "../plugin";
+
 class MockTransport extends Transport {
     sendData = vi.fn().mockResolvedValue({});
     subscribe = vi.fn();
@@ -18,14 +20,21 @@ class MockTransport extends Transport {
 
 const transport = new MockTransport();
 
+const featuresOptions: Required<FeatureOptions> = {
+    hoverEnabled: true,
+    completionEnabled: true,
+    definitionEnabled: true,
+    renameEnabled: true,
+    codeActionsEnabled: true,
+    signatureHelpEnabled: true,
+    diagnosticsEnabled: true,
+};
 describe("LanguageServerClient initialization options", () => {
     it("uses default capabilities when none provided", async () => {
         const client = new LanguageServerClient({
             transport,
             rootUri: "file:///root",
             workspaceFolders: [{ uri: "file:///root", name: "root" }],
-            documentUri: "file:///root/file.ts",
-            languageId: "typescript",
         });
 
         // biome-ignore lint/suspicious/noExplicitAny: tests
@@ -285,6 +294,7 @@ it("applies rename changes correctly to a document", async () => {
         "file:///root/file.ts",
         "typescript",
         mockView,
+        featuresOptions,
     );
 
     // Set capabilities to include rename support
@@ -357,6 +367,7 @@ it("applies rename the whole cell", async () => {
         "file:///root/file.ts",
         "typescript",
         mockView,
+        featuresOptions,
     );
 
     // Set capabilities to include rename support
@@ -400,6 +411,7 @@ it("handles prepareRenameFallback", async () => {
         "file:///root/file.ts",
         "typescript",
         mockView,
+        featuresOptions,
     );
 
     const prepare = (opts: { line: number; character: number }) => {

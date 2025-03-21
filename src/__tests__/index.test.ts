@@ -335,17 +335,10 @@ describe("exports", () => {
           [
             "LanguageServerClient",
             "LanguageServerPlugin",
-            "codeActionsEnabled",
-            "completionEnabled",
-            "definitionEnabled",
-            "diagnosticsEnabled",
             "documentUri",
-            "hoverEnabled",
             "languageId",
             "languageServer",
-            "languageServerClient",
             "languageServerWithClient",
-            "renameEnabled",
           ]
         `);
     });
