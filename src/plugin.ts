@@ -1255,6 +1255,12 @@ interface LanguageServerOptions {
      * If not provided, the default hover config will be used.
      */
     hoverConfig?: Parameters<typeof hoverTooltip>[1];
+
+    /**
+     * Regular expression for determining when to show completions.
+     * Default is to show completions when typing a word, after a dot, or after a slash.
+     */
+    completionMatchBefore?: RegExp;
 }
 
 /**
@@ -1358,38 +1364,40 @@ export function languageServerWithClient(options: LanguageServerOptions) {
             autocompletion({
                 ...options.completionConfig,
                 override: [
+                    /**
+                     * Completion source function that handles LSP-based autocompletion
+                     *
+                     * This function determines the appropriate trigger kind and character,
+                     * checks if completion should be shown, and delegates to the plugin's
+                     * requestCompletion method.
+                     *
+                     * @param context The completion context from CodeMirror
+                     * @returns A CompletionResult or null if no completions are available
+                     */
                     async (context) => {
+                        // Don't proceed if plugin isn't initialized
                         if (plugin == null) {
                             return null;
                         }
 
-                        const { state, pos, explicit } = context;
-                        const line = state.doc.lineAt(pos);
-                        let trigKind: CompletionTriggerKind =
-                            CompletionTriggerKind.Invoked;
-                        let trigChar: string | undefined;
-                        if (
-                            !explicit &&
-                            plugin.client.capabilities?.completionProvider?.triggerCharacters?.includes(
-                                line.text[pos - line.from - 1] || "",
-                            )
-                        ) {
-                            trigKind = CompletionTriggerKind.TriggerCharacter;
-                            trigChar = line.text[pos - line.from - 1];
-                        }
-                        if (
-                            trigKind === CompletionTriggerKind.Invoked &&
-                            !context.matchBefore(/\w+$/)
-                        ) {
+                        const { state, pos } = context;
+
+                        const result = getCompletionTriggerKind(
+                            context,
+                            plugin.client.capabilities?.completionProvider
+                                ?.triggerCharacters ?? [],
+                            options.completionMatchBefore,
+                        );
+
+                        if (result == null) {
                             return null;
                         }
+
+                        // Request completions from the language server
                         return await plugin.requestCompletion(
                             context,
                             offsetToPos(state.doc, pos),
-                            {
-                                triggerCharacter: trigChar,
-                                triggerKind: trigKind,
-                            },
+                            result,
                         );
                     },
                 ],
@@ -1470,4 +1478,37 @@ export function languageServerWithClient(options: LanguageServerOptions) {
     );
 
     return extensions;
+}
+
+export function getCompletionTriggerKind(
+    context: CompletionContext,
+    triggerCharacters: string[],
+    matchBeforePattern?: RegExp,
+) {
+    const { state, pos, explicit } = context;
+    const line = state.doc.lineAt(pos);
+
+    // Determine trigger kind and character
+    let triggerKind: CompletionTriggerKind = CompletionTriggerKind.Invoked;
+    let triggerCharacter: string | undefined;
+
+    // Check if completion was triggered by a special character
+    const prevChar = line.text[pos - line.from - 1] || "";
+    const isTriggerChar = triggerCharacters?.includes(prevChar);
+
+    if (!explicit && isTriggerChar) {
+        triggerKind = CompletionTriggerKind.TriggerCharacter;
+        triggerCharacter = prevChar;
+    }
+
+    // For manual invocation, only show completions when typing
+    // Use the provided pattern or default to words, dots, or slashes
+    if (
+        triggerKind === CompletionTriggerKind.Invoked &&
+        !context.matchBefore(matchBeforePattern || /\w+\.|\/|\w+$/)
+    ) {
+        return null;
+    }
+
+    return { triggerKind, triggerCharacter };
 }
