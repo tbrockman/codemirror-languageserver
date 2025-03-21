@@ -1244,6 +1244,17 @@ interface LanguageServerOptions {
     renameEnabled?: boolean;
     /** Whether to enable code actions (default: true) */
     codeActionsEnabled?: boolean;
+
+    /**
+     * Configuration for the completion feature.
+     * If not provided, the default completion config will be used.
+     */
+    completionConfig?: Parameters<typeof autocompletion>[0];
+    /**
+     * Configuration for the hover feature.
+     * If not provided, the default hover config will be used.
+     */
+    hoverConfig?: Parameters<typeof hoverTooltip>[1];
 }
 
 /**
@@ -1337,7 +1348,7 @@ export function languageServerWithClient(options: LanguageServerOptions) {
                     view,
                     offsetToPos(view.state.doc, pos),
                 );
-            }),
+            }, options.hoverConfig),
         );
     }
 
@@ -1345,6 +1356,7 @@ export function languageServerWithClient(options: LanguageServerOptions) {
     if (isCompletionEnabled) {
         extensions.push(
             autocompletion({
+                ...options.completionConfig,
                 override: [
                     async (context) => {
                         if (plugin == null) {
