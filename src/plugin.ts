@@ -534,15 +534,22 @@ export class LanguageServerPlugin implements PluginValue {
         const token = context.matchBefore(match);
         let { pos } = context;
 
+        // If we found a token that matches our completion pattern
         if (token) {
+            // Set position to the start of the token
             pos = token.from;
             const word = token.text.toLowerCase();
+            // Only filter and sort for word characters
             if (/^\w+$/.test(word)) {
+                // Filter items to only include those that start with the current word
                 items = items
                     .filter(({ label, filterText }) => {
                         const text = filterText ?? label;
                         return text.toLowerCase().startsWith(word);
                     })
+                    // Sort completion items:
+                    // 1. Prioritize items that start with the exact token text
+                    // 2. Otherwise maintain original order
                     .sort((a, b) => {
                         const aText = a.sortText ?? a.label;
                         const bText = b.sortText ?? b.label;
@@ -557,6 +564,13 @@ export class LanguageServerPlugin implements PluginValue {
                         return 0;
                     });
             }
+        } else {
+            // If no token was found, sort items alphabetically using their sortText or label
+            items = items.sort((a, b) => {
+                const aText = a.sortText ?? a.label;
+                const bText = b.sortText ?? b.label;
+                return aText.localeCompare(bText);
+            });
         }
 
         const options = items.map((item) => {
@@ -1868,12 +1882,11 @@ export function getCompletionTriggerKind(
         triggerKind = CompletionTriggerKind.TriggerCharacter;
         triggerCharacter = prevChar;
     }
-
     // For manual invocation, only show completions when typing
     // Use the provided pattern or default to words, dots, or slashes
     if (
         triggerKind === CompletionTriggerKind.Invoked &&
-        !context.matchBefore(matchBeforePattern || /\w+\.|\/|\w+$/)
+        !context.matchBefore(matchBeforePattern || /\w+$|\w+\.|\/$/)
     ) {
         return null;
     }
