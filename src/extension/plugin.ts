@@ -23,6 +23,7 @@ export class LanguageServerPlugin implements PluginValue {
         private languageId: string,
         private view: EditorView,
         private allowHTMLContent = false,
+        private renderMarkdown?: (contents: LSP.MarkupContent | LSP.MarkupContent[], allowHTML: boolean) => HTMLElement = formatContents,
         onGoToDefinition?: (result: DefinitionResult) => void,
     ) {
         this.documentVersion = 0;
@@ -116,13 +117,17 @@ export class LanguageServerPlugin implements PluginValue {
         if (pos == null) {
             return null;
         }
-        const dom = document.createElement("div");
-        dom.classList.add("documentation");
-        if (this.allowHTMLContent) {
-            dom.innerHTML = formatContents(contents);
-        } else {
-            dom.textContent = formatContents(contents);
-        }
+
+        const dom = this.renderMarkdown(contents, this.allowHTMLContent)
+
+        // const dom = document.createElement("div");
+        // dom.classList.add("documentation");
+
+        // if (this.allowHTMLContent) {
+        //     dom.innerHTML = formatContents(contents);
+        // } else {
+        //     dom.textContent = formatContents(contents);
+        // }
         return {
             pos,
             end,

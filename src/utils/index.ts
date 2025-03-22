@@ -35,12 +35,12 @@ export function offsetToPos(doc: Text, offset: number) {
 export function formatContents(
     contents:
         | LSP.MarkupContent
-        | LSP.MarkedString
-        | LSP.MarkedString[]
+        | LSP.MarkupContent[]
         | undefined,
-): string {
+    allowHTML: boolean
+): HTMLElement {
     if (!contents) {
-        return "";
+        return document.createElement('div');
     }
     if (isLSPMarkupContent(contents)) {
         let value = contents.value;
@@ -94,7 +94,7 @@ export function isLSPTextEdit(
 }
 
 export function isLSPMarkupContent(
-    contents: LSP.MarkupContent | LSP.MarkedString | LSP.MarkedString[],
+    contents: LSP.MarkupContent | LSP.MarkupContent[],
 ): contents is LSP.MarkupContent {
     return (contents as LSP.MarkupContent).kind !== undefined;
 }
