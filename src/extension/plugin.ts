@@ -12,6 +12,8 @@ const CompletionItemKindMap = Object.fromEntries(
 ) as Record<CompletionItemKind, string>;
 const logger = console.log;
 
+export type LSPContent = LSP.MarkupContent | LSP.MarkedString | LSP.MarkedString[];
+
 export class LanguageServerPlugin implements PluginValue {
     private documentVersion: number;
     private changesTimeout: number;
@@ -23,7 +25,7 @@ export class LanguageServerPlugin implements PluginValue {
         private languageId: string,
         private view: EditorView,
         private allowHTMLContent = false,
-        private renderMarkdown?: (contents: LSP.MarkupContent | LSP.MarkupContent[], allowHTML: boolean) => HTMLElement = formatContents,
+        private renderMarkdown: (contents: LSPContent, allowHTML: boolean) => string = formatContents,
         onGoToDefinition?: (result: DefinitionResult) => void,
     ) {
         this.documentVersion = 0;
@@ -118,16 +120,15 @@ export class LanguageServerPlugin implements PluginValue {
             return null;
         }
 
-        const dom = this.renderMarkdown(contents, this.allowHTMLContent)
+        const dom = document.createElement("div");
+        const inner = this.renderMarkdown(contents, this.allowHTMLContent)
+        dom.classList.add("documentation");
 
-        // const dom = document.createElement("div");
-        // dom.classList.add("documentation");
-
-        // if (this.allowHTMLContent) {
-        //     dom.innerHTML = formatContents(contents);
-        // } else {
-        //     dom.textContent = formatContents(contents);
-        // }
+        if (this.allowHTMLContent) {
+            dom.innerHTML = inner;
+        } else {
+            dom.textContent = inner;
+        }
         return {
             pos,
             end,

@@ -60,6 +60,7 @@ export function languageServerWithTransport(options: LanguageServerOptions) {
                 options.languageId,
                 view,
                 options.allowHTMLContent,
+                options.renderMarkdown,
                 options.onGoToDefinition,
             );
             return plugin;

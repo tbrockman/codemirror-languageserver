@@ -59,6 +59,7 @@ export interface LanguageServerOptions extends LanguageServerClientOptions {
     client?: LanguageServerClient;
     allowHTMLContent?: boolean;
     keyboardShortcuts?: KeyboardShortcuts;
+    renderMarkdown?: (content: LSP.MarkupContent | LSP.MarkedString | LSP.MarkedString[], allowHTML: boolean) => string;
     onGoToDefinition?: (result: DefinitionResult) => void;
 }
 
