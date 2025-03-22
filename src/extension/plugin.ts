@@ -3,7 +3,7 @@ import type { DefinitionResult, LanguageServerClient, Notification } from "../ls
 import { Completion, CompletionContext, CompletionResult, insertCompletionText } from "@codemirror/autocomplete";
 import { CompletionItemKind, CompletionTriggerKind, DiagnosticSeverity, PublishDiagnosticsParams } from "vscode-languageserver-protocol";
 import type LSP from 'vscode-languageserver-protocol';
-import { formatContents, isLSPTextEdit, posToOffset, posToOffsetOrZero, prefixMatch, showErrorMessage } from "../utils/index.js";
+import { renderMarkdown as _renderMarkdown, isLSPTextEdit, posToOffset, posToOffsetOrZero, prefixMatch, showErrorMessage } from "../utils/index.js";
 import { Action, Diagnostic, setDiagnostics } from "@codemirror/lint";
 
 const changesDelay = 500;
@@ -25,7 +25,7 @@ export class LanguageServerPlugin implements PluginValue {
         private languageId: string,
         private view: EditorView,
         private allowHTMLContent = false,
-        private renderMarkdown: (contents: LSPContent, allowHTML: boolean) => string = formatContents,
+        private renderMarkdown: (contents: LSPContent, allowHTML: boolean) => string = _renderMarkdown,
         onGoToDefinition?: (result: DefinitionResult) => void,
     ) {
         this.documentVersion = 0;

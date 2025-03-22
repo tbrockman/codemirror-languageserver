@@ -32,7 +32,7 @@ export function offsetToPos(doc: Text, offset: number) {
     };
 }
 
-export function formatContents(
+export function renderMarkdown(
     contents:
         | LSP.MarkupContent
         | LSP.MarkedString
@@ -50,7 +50,7 @@ export function formatContents(
         return value;
     }
     if (Array.isArray(contents)) {
-        return contents.map((c) => `${formatContents(c)}\n\n`).join("");
+        return contents.map((c) => `${renderMarkdown(c)}\n\n`).join("");
     }
     if (typeof contents === "string") {
         return contents;
