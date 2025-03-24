@@ -1,12 +1,12 @@
 import { EditorView, PluginValue, Tooltip, ViewUpdate } from "@codemirror/view";
 import type { DefinitionResult, LanguageServerClient, Notification } from "../lsp/types.js";
 import { Completion, CompletionContext, CompletionResult, insertCompletionText } from "@codemirror/autocomplete";
-import { CompletionItemKind, CompletionTriggerKind, DiagnosticSeverity, PublishDiagnosticsParams } from "vscode-languageserver-protocol";
+import { CompletionItemKind, CompletionTriggerKind, DiagnosticSeverity, PublishDiagnosticsParams, TextDocumentContentChangeEvent } from "vscode-languageserver-protocol";
 import type LSP from 'vscode-languageserver-protocol';
-import { renderMarkdown as _renderMarkdown, isLSPTextEdit, posToOffset, posToOffsetOrZero, prefixMatch, showErrorMessage } from "../utils/index.js";
+import { renderMarkdown as _renderMarkdown, isLSPTextEdit, offsetToPos, posToOffset, posToOffsetOrZero, prefixMatch, showErrorMessage } from "../utils/index.js";
 import { Action, Diagnostic, setDiagnostics } from "@codemirror/lint";
+import { ChangeSet, Text } from "@codemirror/state";
 
-const changesDelay = 500;
 const CompletionItemKindMap = Object.fromEntries(
     Object.entries(CompletionItemKind).map(([key, value]) => [value, key]),
 ) as Record<CompletionItemKind, string>;
@@ -16,7 +16,6 @@ export type LSPContent = LSP.MarkupContent | LSP.MarkedString | LSP.MarkedString
 
 export class LanguageServerPlugin implements PluginValue {
     private documentVersion: number;
-    private changesTimeout: number;
     private onGoToDefinition?: (result: DefinitionResult) => void;
 
     constructor(
@@ -29,7 +28,6 @@ export class LanguageServerPlugin implements PluginValue {
         onGoToDefinition?: (result: DefinitionResult) => void,
     ) {
         this.documentVersion = 0;
-        this.changesTimeout = 0;
         this.onGoToDefinition = onGoToDefinition;
 
         this.client.attachPlugin(this);
@@ -39,18 +37,27 @@ export class LanguageServerPlugin implements PluginValue {
         });
     }
 
-    public update({ docChanged }: ViewUpdate) {
+    private changeSetToChangeEvents(doc: Text, changes: ChangeSet): TextDocumentContentChangeEvent[] {
+        const events: TextDocumentContentChangeEvent[] = []
+        changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
+            const start = offsetToPos(doc, fromA)
+            const end = offsetToPos(doc, toA)
+            const text = inserted.toString()
+
+            events.push({
+                range: { start, end },
+                rangeLength: toA - fromA,
+                text
+            })
+        })
+        return events;
+    }
+
+    public update({ docChanged, startState, changes }: ViewUpdate) {
         if (!docChanged) {
             return;
         }
-        if (this.changesTimeout) {
-            clearTimeout(this.changesTimeout);
-        }
-        this.changesTimeout = self.setTimeout(() => {
-            this.sendChange({
-                documentText: this.view.state.doc.toString(),
-            });
-        }, changesDelay);
+        this.sendChanges(this.changeSetToChangeEvents(startState.doc, changes));
     }
 
     public destroy() {
@@ -69,7 +76,7 @@ export class LanguageServerPlugin implements PluginValue {
         });
     }
 
-    public async sendChange({ documentText }: { documentText: string }) {
+    public async sendChanges(changes: LSP.TextDocumentContentChangeEvent[]) {
         await this.client?.started()
         try {
             await this.client.textDocumentDidChange({
@@ -77,7 +84,7 @@ export class LanguageServerPlugin implements PluginValue {
                     uri: this.documentUri,
                     version: this.documentVersion++,
                 },
-                contentChanges: [{ text: documentText }],
+                contentChanges: changes,
             });
         } catch (e) {
             console.error(e);
@@ -85,7 +92,7 @@ export class LanguageServerPlugin implements PluginValue {
     }
 
     public requestDiagnostics(view: EditorView) {
-        this.sendChange({ documentText: view.state.doc.toString() });
+        this.sendChanges([{ text: view.state.doc.toString() }]);
     }
 
     public async requestHoverTooltip(
@@ -152,9 +159,6 @@ export class LanguageServerPlugin implements PluginValue {
         ) {
             return null;
         }
-        // this.sendChange({
-        //     documentText: context.state.doc.toString(),
-        // });
 
         const result = await this.client.textDocumentCompletion({
             textDocument: { uri: this.documentUri },
