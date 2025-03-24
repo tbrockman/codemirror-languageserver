@@ -58,9 +58,7 @@ export class LanguageServerPlugin implements PluginValue {
     }
 
     public async initialize({ documentText }: { documentText: string }) {
-        if (this.client.initializePromise) {
-            await this.client.initializePromise;
-        }
+        await this.client?.started()
         this.client.textDocumentDidOpen({
             textDocument: {
                 uri: this.documentUri,
@@ -72,9 +70,7 @@ export class LanguageServerPlugin implements PluginValue {
     }
 
     public async sendChange({ documentText }: { documentText: string }) {
-        if (!this.client.ready) {
-            return;
-        }
+        await this.client?.started()
         try {
             await this.client.textDocumentDidChange({
                 textDocument: {
@@ -96,7 +92,9 @@ export class LanguageServerPlugin implements PluginValue {
         view: EditorView,
         { line, character }: { line: number; character: number },
     ): Promise<Tooltip | null> {
-        if (!(this.client.ready && this.client.capabilities?.hoverProvider)) {
+        await this.client?.started()
+
+        if (!this.client.capabilities?.hoverProvider) {
             return null;
         }
 
@@ -148,8 +146,9 @@ export class LanguageServerPlugin implements PluginValue {
             triggerCharacter: string | undefined;
         },
     ): Promise<CompletionResult | null> {
+        await this.client?.started()
         if (
-            !(this.client.ready && this.client.capabilities?.completionProvider)
+            !this.client.capabilities?.completionProvider
         ) {
             return null;
         }
@@ -349,8 +348,9 @@ export class LanguageServerPlugin implements PluginValue {
         _view: EditorView,
         { line, character }: { line: number; character: number },
     ) {
+        await this.client?.started()
         if (
-            !(this.client.ready && this.client.capabilities?.definitionProvider)
+            !this.client.capabilities?.definitionProvider
         ) {
             return;
         }
@@ -502,8 +502,9 @@ export class LanguageServerPlugin implements PluginValue {
         range: LSP.Range,
         diagnosticCodes: string[],
     ): Promise<(LSP.Command | LSP.CodeAction)[] | null> {
+        await this.client?.started()
         if (
-            !(this.client.ready && this.client.capabilities?.codeActionProvider)
+            !this.client.capabilities?.codeActionProvider
         ) {
             return null;
         }
@@ -528,10 +529,7 @@ export class LanguageServerPlugin implements PluginValue {
         view: EditorView,
         { line, character }: { line: number; character: number },
     ) {
-        if (!this.client.ready) {
-            showErrorMessage(view, "Language server not ready");
-            return;
-        }
+        await this.client?.started()
 
         if (!this.client.capabilities?.renameProvider) {
             showErrorMessage(view, "Rename not supported by language server");

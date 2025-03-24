@@ -169,6 +169,11 @@ export class LanguageServerClientImpl implements LanguageServerClient {
         this.ready = true;
     }
 
+    public async started(): Promise<boolean> {
+        await this.initializePromise;
+        return this.ready;
+    }
+
     public close() {
         this.client.close();
     }

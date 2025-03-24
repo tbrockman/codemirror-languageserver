@@ -1,12 +1,14 @@
 {
-    "name": "@marimo-team/codemirror-languageserver",
+    "name": "@ezcodelol/codemirror-languageserver",
     "publishConfig": {
         "access": "public"
     },
     "sideEffects": false,
     "version": "1.13.6",
     "description": "Language Server Plugin for CodeMirror 6",
-    "files": ["dist"],
+    "files": [
+        "dist"
+    ],
     "exports": {
         "./package.json": "./package.json",
         ".": {

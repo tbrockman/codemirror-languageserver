@@ -7,8 +7,8 @@ import {
     languageServerWithTransport,
 } from "../index";
 import { offsetToPos, posToOffset } from "../utils";
-import { LanguageServerClient } from "../types";
-import { CompletionItem } from "vscode-languageserver-protocol";
+import { LanguageServerClient } from "../lsp/types";
+import { CompletionItem, Definition, DidChangeTextDocumentParams, DidOpenTextDocumentParams, Hover } from "vscode-languageserver-protocol";
 
 // Mock WebSocket transport
 vi.mock("@open-rpc/client-js", () => ({
@@ -21,6 +21,33 @@ vi.mock("@open-rpc/client-js", () => ({
     })),
     RequestManager: vi.fn(),
 }));
+
+const createMockClient = (init?: Partial<LanguageServerClient>): LanguageServerClient => {
+    return {
+        ready: true,
+        capabilities: { definitionProvider: true },
+        clientCapabilities: {}, // Adjust as needed
+        initializePromise: Promise.resolve(),
+
+        initialize: vi.fn().mockResolvedValue(undefined),
+        started: vi.fn().mockResolvedValue(true),
+        close: vi.fn(),
+
+        attachPlugin: vi.fn(),
+        detachPlugin: vi.fn(),
+
+        textDocumentDidOpen: vi.fn().mockResolvedValue({} as DidOpenTextDocumentParams),
+        textDocumentDidChange: vi.fn().mockResolvedValue({} as DidChangeTextDocumentParams),
+        textDocumentHover: vi.fn().mockResolvedValue({} as Hover),
+        textDocumentCompletion: vi.fn().mockResolvedValue(null),
+        completionItemResolve: vi.fn().mockResolvedValue({} as CompletionItem),
+        textDocumentDefinition: vi.fn().mockResolvedValue({} as Definition),
+        textDocumentCodeAction: vi.fn().mockResolvedValue(null),
+        textDocumentRename: vi.fn().mockResolvedValue(null),
+        textDocumentPrepareRename: vi.fn().mockResolvedValue(null),
+        ...init
+    };
+}
 
 describe("LanguageServer", () => {
     describe("Utility Functions", () => {
@@ -172,18 +199,9 @@ describe("LanguageServer", () => {
             const onDefinitionSpy = vi.fn();
 
             // Mock the client
-            const mockClient = {
-                ready: true,
-                capabilities: { definitionProvider: true },
-                textDocumentDefinition: vi
-                    .fn()
-                    .mockResolvedValue(mockDefinitionResult),
-                attachPlugin: vi.fn(),
-                detachPlugin: vi.fn(),
-                initializePromise: Promise.resolve(),
-                textDocumentDidOpen: vi.fn(),
-                textDocumentDidChange: vi.fn(),
-            };
+            const mockClient = createMockClient({
+                textDocumentDefinition: vi.fn().mockResolvedValue(mockDefinitionResult),
+            });
 
             // Create a mock EditorView with the necessary methods
             const mockDoc = Text.of(["test document"]);
@@ -205,7 +223,7 @@ describe("LanguageServer", () => {
                 documentUri: "file:///test/file.ts",
                 languageId: "typescript",
                 transport: new WebSocketTransport("ws://test"),
-                client: mockClient as unknown as LanguageServerClient,
+                client: mockClient as LanguageServerClient,
                 onGoToDefinition: onDefinitionSpy,
             });
 
@@ -261,18 +279,11 @@ describe("LanguageServer", () => {
             const onDefinitionSpy = vi.fn();
 
             // Mock the client
-            const mockClient = {
-                ready: true,
-                capabilities: { definitionProvider: true },
+            const mockClient = createMockClient({
                 textDocumentDefinition: vi
                     .fn()
                     .mockResolvedValue(mockDefinitionResult),
-                attachPlugin: vi.fn(),
-                detachPlugin: vi.fn(),
-                initializePromise: Promise.resolve(),
-                textDocumentDidOpen: vi.fn(),
-                textDocumentDidChange: vi.fn(),
-            };
+            })
 
             // Create a mock EditorView with the necessary methods
             const mockDoc = Text.of(["test document"]);
@@ -293,7 +304,7 @@ describe("LanguageServer", () => {
                 documentUri: documentUri,
                 languageId: "typescript",
                 transport: new WebSocketTransport("ws://test"),
-                client: mockClient as unknown as LanguageServerClient,
+                client: mockClient,
                 onGoToDefinition: onDefinitionSpy,
             });
 

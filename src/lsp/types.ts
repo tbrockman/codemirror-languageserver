@@ -40,6 +40,7 @@ export interface LanguageServerClient {
     clientCapabilities: LanguageServerClientOptions["capabilities"];
 
     initialize: () => Promise<void>;
+    started: () => Promise<boolean>;
     close: () => void;
     attachPlugin: (plugin: LanguageServerPlugin) => void;
     detachPlugin: (plugin: LanguageServerPlugin) => void;
