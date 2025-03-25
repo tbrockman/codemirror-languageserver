@@ -1,4 +1,4 @@
-import { autocompletion, insertCompletionText } from "@codemirror/autocomplete";
+import { autocompletion } from "@codemirror/autocomplete";
 import { type Action, type Diagnostic, setDiagnostics } from "@codemirror/lint";
 import {
     EditorView,
@@ -13,13 +13,11 @@ import {
     WebSocketTransport,
 } from "@open-rpc/client-js";
 import {
-    CompletionItemKind,
     CompletionTriggerKind,
     DiagnosticSeverity,
 } from "vscode-languageserver-protocol";
 
 import type {
-    Completion,
     CompletionContext,
     CompletionResult,
 } from "@codemirror/autocomplete";
@@ -32,20 +30,16 @@ import { documentUri, languageId } from "./config.js";
 import {
     formatContents,
     isEmptyDocumentation,
-    isLSPTextEdit,
     offsetToPos,
     posToOffset,
     posToOffsetOrZero,
     prefixMatch,
     showErrorMessage,
 } from "./utils.js";
+import { convertCompletionItem } from "./completion.js";
 
 const TIMEOUT = 10000;
 const CHANGES_DELAY = 500;
-
-const CompletionItemKindMap = Object.fromEntries(
-    Object.entries(CompletionItemKind).map(([key, value]) => [value, key]),
-) as Record<CompletionItemKind, string>;
 
 const logger = console.log;
 
@@ -542,6 +536,13 @@ export class LanguageServerPlugin implements PluginValue {
         if (token) {
             // Set position to the start of the token
             pos = token.from;
+
+            // HACK: There might be a better place for this (like prefixMatch), but if the token includes an open `(`
+            // we should only replace after the open parenthesis, by bumping from.
+            if (token.text.includes("(")) {
+                pos = token.from + token.text.indexOf("(") + 1;
+            }
+
             const word = token.text.toLowerCase();
             // Only filter and sort for word characters
             if (/^\w+$/.test(word)) {
@@ -578,147 +579,15 @@ export class LanguageServerPlugin implements PluginValue {
         }
 
         const options = items.map((item) => {
-            const {
-                detail,
-                labelDetails,
-                label,
-                kind,
-                textEdit,
-                insertText,
-                documentation,
-                additionalTextEdits,
-            } = item;
-
-            const completion: Completion = {
-                label,
-                detail: labelDetails?.detail || detail,
-                apply(
-                    view: EditorView,
-                    _completion: Completion,
-                    from: number,
-                    to: number,
-                ) {
-                    if (textEdit && isLSPTextEdit(textEdit)) {
-                        view.dispatch(
-                            insertCompletionText(
-                                view.state,
-                                textEdit.newText,
-                                posToOffsetOrZero(
-                                    view.state.doc,
-                                    textEdit.range.start,
-                                ),
-                                posToOffsetOrZero(
-                                    view.state.doc,
-                                    textEdit.range.end,
-                                ),
-                            ),
-                        );
-                    } else {
-                        view.dispatch(
-                            insertCompletionText(
-                                view.state,
-                                // Prefer insertText, otherwise fallback to label
-                                insertText || label,
-                                from,
-                                to,
-                            ),
-                        );
-                    }
-                    if (!additionalTextEdits) {
-                        return;
-                    }
-                    const sortedEdits = additionalTextEdits.sort(
-                        ({ range: { end: a } }, { range: { end: b } }) => {
-                            if (
-                                posToOffsetOrZero(view.state.doc, a) <
-                                posToOffsetOrZero(view.state.doc, b)
-                            ) {
-                                return 1;
-                            }
-                            if (
-                                posToOffsetOrZero(view.state.doc, a) >
-                                posToOffsetOrZero(view.state.doc, b)
-                            ) {
-                                return -1;
-                            }
-                            return 0;
-                        },
-                    );
-                    for (const textEdit of sortedEdits) {
-                        view.dispatch(
-                            view.state.update({
-                                changes: {
-                                    from: posToOffsetOrZero(
-                                        view.state.doc,
-                                        textEdit.range.start,
-                                    ),
-                                    to: posToOffset(
-                                        view.state.doc,
-                                        textEdit.range.end,
-                                    ),
-                                    insert: textEdit.newText,
-                                },
-                            }),
-                        );
-                    }
-                },
-                type: kind && CompletionItemKindMap[kind].toLowerCase(),
-            };
-
-            // Support lazy loading of documentation through completionItem/resolve
-            if (this.client.capabilities?.completionProvider?.resolveProvider) {
-                completion.info = async () => {
-                    try {
-                        const resolved =
-                            await this.client.completionItemResolve(item);
-                        const dom = document.createElement("div");
-                        dom.classList.add("documentation");
-                        const content = resolved.documentation || documentation;
-                        if (!content) {
-                            return null;
-                        }
-                        if (isEmptyDocumentation(content)) {
-                            return null;
-                        }
-                        if (this.allowHTMLContent) {
-                            dom.innerHTML = formatContents(content);
-                        } else {
-                            dom.textContent = formatContents(content);
-                        }
-                        return dom;
-                    } catch (e) {
-                        console.error("Failed to resolve completion item:", e);
-                        if (isEmptyDocumentation(documentation)) {
-                            return null;
-                        }
-                        // Fallback to existing documentation if resolve fails
-                        if (documentation) {
-                            const dom = document.createElement("div");
-                            dom.classList.add("documentation");
-                            if (this.allowHTMLContent) {
-                                dom.innerHTML = formatContents(documentation);
-                            } else {
-                                dom.textContent = formatContents(documentation);
-                            }
-                            return dom;
-                        }
-                        return null;
-                    }
-                };
-            } else if (documentation) {
-                // Fallback for servers without resolve support
-                completion.info = () => {
-                    const dom = document.createElement("div");
-                    dom.classList.add("documentation");
-                    if (this.allowHTMLContent) {
-                        dom.innerHTML = formatContents(documentation);
-                    } else {
-                        dom.textContent = formatContents(documentation);
-                    }
-                    return dom;
-                };
-            }
-            return completion;
+            return convertCompletionItem(item, {
+                allowHTMLContent: this.allowHTMLContent,
+                hasResolveProvider:
+                    this.client.capabilities?.completionProvider
+                        ?.resolveProvider ?? false,
+                resolveItem: this.client.completionItemResolve.bind(
+                    this.client,
+                ),
+            });
         });
 
         return {
@@ -1256,10 +1125,17 @@ export class LanguageServerPlugin implements PluginValue {
 
         if (typeof paramLabel === "string") {
             // Simple string replacement
-            signatureElement.textContent = signatureText.replace(
-                paramLabel,
-                `«${paramLabel}»`,
-            );
+            if (this.allowHTMLContent) {
+                signatureElement.innerHTML = signatureText.replace(
+                    paramLabel,
+                    `<strong class="cm-signature-active-param">${paramLabel}</strong>`,
+                );
+            } else {
+                signatureElement.textContent = signatureText.replace(
+                    paramLabel,
+                    `«${paramLabel}»`,
+                );
+            }
         } else if (Array.isArray(paramLabel) && paramLabel.length === 2) {
             // Handle array format [startIndex, endIndex]
             this.applyRangeHighlighting(
@@ -1883,10 +1759,10 @@ export function getCompletionTriggerKind(
         triggerCharacter = prevChar;
     }
     // For manual invocation, only show completions when typing
-    // Use the provided pattern or default to words, dots, or slashes
+    // Use the provided pattern or default to words, dots, commas, or slashes
     if (
         triggerKind === CompletionTriggerKind.Invoked &&
-        !context.matchBefore(matchBeforePattern || /\w+$|\w+\.|\/$/)
+        !context.matchBefore(matchBeforePattern || /(\w+|\w+\.|\/|,)$/)
     ) {
         return null;
     }

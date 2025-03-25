@@ -61,8 +61,14 @@ export function formatContents(
     }
     return "";
 }
-
-export function toSet(chars: Set<string>) {
+/**
+ * Converts a Set of characters into a regex character class string.
+ * Words get grouped together with `\w`.
+ *
+ * @param chars - Set of characters to convert
+ * @returns A string representing a regex character class.
+ */
+function toSet(chars: Set<string>) {
     let preamble = "";
     let flat = Array.from(chars).join("");
     const words = /\w/.test(flat);
@@ -73,6 +79,16 @@ export function toSet(chars: Set<string>) {
     return `[${preamble}${flat.replace(/[^\w\s]/g, "\\$&")}]`;
 }
 
+/**
+ * Analyzes completion items to generate regex patterns for matching prefixes.
+ * Used to determine what text should be considered part of the current token
+ * when filtering completion items.
+ *
+ * @param items - Array of LSP completion items to analyze
+ * @returns A tuple of two RegExp objects:
+ *   1. A pattern that matches from the start of a string
+ *   2. A pattern that matches anywhere in a string
+ */
 export function prefixMatch(items: LSP.CompletionItem[]) {
     const first = new Set<string>();
     const rest = new Set<string>();
