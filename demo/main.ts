@@ -42,6 +42,8 @@ class MockWebSocket {
         const id = _id ?? "_";
 
         // Handle LSP messages
+        // biome-ignore lint/suspicious/noConsoleLog: <explanation>
+        console.log("method", method);
         if (method === "initialize") {
             return this.respond(id, this.server.initialize());
         }

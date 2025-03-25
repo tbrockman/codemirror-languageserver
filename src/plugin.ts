@@ -5,6 +5,7 @@ import {
     type Tooltip,
     ViewPlugin,
     hoverTooltip,
+    keymap,
 } from "@codemirror/view";
 import {
     Client,
@@ -1163,6 +1164,58 @@ export class LanguageServerPlugin implements PluginValue {
     }
 
     /**
+     * Shows a signature help tooltip at the specified position
+     */
+    public async showSignatureHelpTooltip(
+        view: EditorView,
+        pos: number,
+        triggerCharacter?: string,
+    ) {
+        const tooltip = await this.requestSignatureHelp(
+            view,
+            offsetToPos(view.state.doc, pos),
+            triggerCharacter,
+        );
+
+        if (tooltip) {
+            // Create and show the tooltip manually
+            const { pos: tooltipPos, create } = tooltip;
+            const tooltipView = create(view);
+
+            const tooltipElement = document.createElement("div");
+            tooltipElement.className = "cm-tooltip cm-signature-tooltip";
+            tooltipElement.style.position = "absolute";
+
+            tooltipElement.appendChild(tooltipView.dom);
+
+            // Position the tooltip
+            const coords = view.coordsAtPos(tooltipPos);
+            if (coords) {
+                tooltipElement.style.left = `${coords.left}px`;
+                tooltipElement.style.top = `${coords.bottom + 5}px`;
+
+                // Add to DOM
+                document.body.appendChild(tooltipElement);
+
+                // Remove after a delay or on editor changes
+                setTimeout(() => {
+                    tooltipElement.remove();
+                }, 10000); // Show for 10 seconds
+
+                // Also remove on any user input
+                const removeTooltip = () => {
+                    tooltipElement.remove();
+                    view.dom.removeEventListener("keydown", removeTooltip);
+                    view.dom.removeEventListener("mousedown", removeTooltip);
+                };
+
+                view.dom.addEventListener("keydown", removeTooltip);
+                view.dom.addEventListener("mousedown", removeTooltip);
+            }
+        }
+    }
+
+    /**
      * Creates the main tooltip container for signature help
      */
     private createTooltipContainer(): HTMLElement {
@@ -1508,6 +1561,8 @@ export interface FeatureOptions {
     codeActionsEnabled?: boolean;
     /** Whether to enable signature help (default: true) */
     signatureHelpEnabled?: boolean;
+    /** Whether to show signature help while typing (default: false) */
+    signatureActivateOnTyping?: boolean;
 }
 
 /**
@@ -1571,8 +1626,8 @@ export function languageServerWithClient(options: LanguageServerOptions) {
     let plugin: LanguageServerPlugin | null = null;
     const shortcuts = {
         rename: "F2",
-        goToDefinition: "ctrlcmd", // ctrlcmd means Ctrl on Windows/Linux, Cmd on Mac
-        signatureHelp: "ctrlcmdshift.Space", // Ctrl/Cmd+Shift+Space
+        goToDefinition: "F12",
+        signatureHelp: "Mod-Shift-Space",
         ...options.keyboardShortcuts,
     };
 
@@ -1587,6 +1642,7 @@ export function languageServerWithClient(options: LanguageServerOptions) {
         renameEnabled: true,
         codeActionsEnabled: true,
         signatureHelpEnabled: true,
+        signatureActivateOnTyping: false,
         // Override defaults with provided options
         ...options,
     };
@@ -1606,6 +1662,58 @@ export function languageServerWithClient(options: LanguageServerOptions) {
             return plugin;
         }),
     ];
+
+    // Add shortcuts
+    extensions.push(
+        keymap.of([
+            {
+                key: shortcuts.signatureHelp,
+                run: (view) => {
+                    if (!(plugin && featuresOptions.signatureHelpEnabled))
+                        return false;
+
+                    const pos = view.state.selection.main.head;
+                    plugin.showSignatureHelpTooltip(view, pos);
+                    return true;
+                },
+            },
+            {
+                key: shortcuts.rename,
+                run: (view) => {
+                    if (!(plugin && featuresOptions.renameEnabled))
+                        return false;
+
+                    const pos = view.state.selection.main.head;
+                    plugin.requestRename(
+                        view,
+                        offsetToPos(view.state.doc, pos),
+                    );
+                    return true;
+                },
+            },
+            {
+                key: shortcuts.goToDefinition,
+                run: (view) => {
+                    if (!(plugin && featuresOptions.definitionEnabled))
+                        return false;
+
+                    const pos = view.state.selection.main.head;
+                    plugin
+                        .requestDefinition(
+                            view,
+                            offsetToPos(view.state.doc, pos),
+                        )
+                        .catch((error) =>
+                            showErrorMessage(
+                                view,
+                                `Go to definition failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+                            ),
+                        );
+                    return true;
+                },
+            },
+        ]),
+    );
 
     // Only add hover tooltip if enabled
     if (featuresOptions.hoverEnabled) {
@@ -1630,6 +1738,9 @@ export function languageServerWithClient(options: LanguageServerOptions) {
 
                 // Early exit if signature help capability is not supported
                 if (!plugin.client.capabilities?.signatureHelpProvider) return;
+
+                // Only proceed if signatureActivateOnTyping is enabled
+                if (!featuresOptions.signatureActivateOnTyping) return;
 
                 const triggerChars = plugin.client.capabilities
                     .signatureHelpProvider.triggerCharacters || ["(", ","];
@@ -1657,66 +1768,11 @@ export function languageServerWithClient(options: LanguageServerOptions) {
                 });
 
                 if (shouldTrigger && triggerPos >= 0) {
-                    const pos = offsetToPos(update.state.doc, triggerPos);
-                    if (pos) {
-                        // Show signature help tooltip
-                        const tooltip = await plugin.requestSignatureHelp(
-                            update.view,
-                            pos,
-                            triggerCharacter,
-                        );
-
-                        if (tooltip) {
-                            // Create and show the tooltip manually
-                            const { pos: tooltipPos, create } = tooltip;
-                            const tooltipView = create(update.view);
-
-                            const tooltipElement =
-                                document.createElement("div");
-                            tooltipElement.className =
-                                "cm-tooltip cm-signature-tooltip";
-                            tooltipElement.style.position = "absolute";
-
-                            tooltipElement.appendChild(tooltipView.dom);
-
-                            // Position the tooltip
-                            const coords = update.view.coordsAtPos(tooltipPos);
-                            if (coords) {
-                                tooltipElement.style.left = `${coords.left}px`;
-                                tooltipElement.style.top = `${coords.bottom + 5}px`;
-
-                                // Add to DOM
-                                document.body.appendChild(tooltipElement);
-
-                                // Remove after a delay or on editor changes
-                                setTimeout(() => {
-                                    tooltipElement.remove();
-                                }, 10000); // Show for 10 seconds
-
-                                // Also remove on any user input
-                                const removeTooltip = () => {
-                                    tooltipElement.remove();
-                                    update.view.dom.removeEventListener(
-                                        "keydown",
-                                        removeTooltip,
-                                    );
-                                    update.view.dom.removeEventListener(
-                                        "mousedown",
-                                        removeTooltip,
-                                    );
-                                };
-
-                                update.view.dom.addEventListener(
-                                    "keydown",
-                                    removeTooltip,
-                                );
-                                update.view.dom.addEventListener(
-                                    "mousedown",
-                                    removeTooltip,
-                                );
-                            }
-                        }
-                    }
+                    plugin.showSignatureHelpTooltip(
+                        update.view,
+                        triggerPos,
+                        triggerCharacter,
+                    );
                 }
             }),
         );
@@ -1798,44 +1854,6 @@ export function languageServerWithClient(options: LanguageServerOptions) {
                             );
                         event.preventDefault();
                     }
-                }
-            },
-            keydown: (event, view) => {
-                if (event.key === shortcuts.rename && plugin) {
-                    // Check if rename is enabled
-                    if (!featuresOptions.renameEnabled) return;
-
-                    const pos = view.state.selection.main.head;
-                    plugin.requestRename(
-                        view,
-                        offsetToPos(view.state.doc, pos),
-                    );
-                    event.preventDefault();
-                    return true;
-                }
-
-                if (
-                    shortcuts.goToDefinition !== "ctrlcmd" &&
-                    event.key === shortcuts.goToDefinition &&
-                    plugin
-                ) {
-                    // Check if definition is enabled
-                    if (!featuresOptions.definitionEnabled) return;
-
-                    const pos = view.state.selection.main.head;
-                    plugin
-                        .requestDefinition(
-                            view,
-                            offsetToPos(view.state.doc, pos),
-                        )
-                        .catch((error) =>
-                            showErrorMessage(
-                                view,
-                                `Go to definition failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-                            ),
-                        );
-                    event.preventDefault();
-                    return true;
                 }
             },
         }),
