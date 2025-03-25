@@ -1,8 +1,8 @@
-import { EditorState } from "@codemirror/state";
-import { CompletionTriggerKind } from "vscode-languageserver-protocol";
-import { describe, expect, it, vi } from "vitest";
-import { getCompletionTriggerKind } from "../plugin";
 import type { CompletionContext } from "@codemirror/autocomplete";
+import { EditorState } from "@codemirror/state";
+import { describe, expect, it, vi } from "vitest";
+import { CompletionTriggerKind } from "vscode-languageserver-protocol";
+import { getCompletionTriggerKind } from "../plugin";
 
 describe("getCompletionTriggerKind", () => {
     // Setup a test document with some content

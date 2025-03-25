@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { isEmptyDocumentation } from "../utils";
 import type * as LSP from "vscode-languageserver-protocol";
+import { isEmptyDocumentation } from "../utils";
 
 describe("isEmptyDocumentation", () => {
     it("should return true for null or undefined documentation", () => {

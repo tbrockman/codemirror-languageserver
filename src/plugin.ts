@@ -23,6 +23,7 @@ import type {
     CompletionContext,
     CompletionResult,
 } from "@codemirror/autocomplete";
+import type { Extension } from "@codemirror/state";
 import type { PluginValue, ViewUpdate } from "@codemirror/view";
 import type { Transport } from "@open-rpc/client-js/build/transports/Transport.js";
 import type { PublishDiagnosticsParams } from "vscode-languageserver-protocol";
@@ -38,7 +39,6 @@ import {
     prefixMatch,
     showErrorMessage,
 } from "./utils.js";
-import type { Extension } from "@codemirror/state";
 
 const TIMEOUT = 10000;
 const CHANGES_DELAY = 500;

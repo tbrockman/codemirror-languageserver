@@ -213,6 +213,7 @@ const state = EditorState.create({
             documentUri: "file:///example.ts",
             languageId: "typescript",
             onGoToDefinition: (result) => {
+                // biome-ignore lint/suspicious/noConsoleLog: <explanation>
                 console.log("Go to definition", result);
             },
         }),

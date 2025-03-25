@@ -256,6 +256,7 @@ it("applies rename changes correctly to a document", async () => {
     // biome-ignore lint/suspicious/noExplicitAny: tests
     (client as any).client.request = vi
         .fn()
+        // biome-ignore lint/suspicious/noExplicitAny: <explanation>
         .mockImplementation((request: any) => {
             if (request.method === "textDocument/rename") {
                 return Promise.resolve<WorkspaceEdit>({
