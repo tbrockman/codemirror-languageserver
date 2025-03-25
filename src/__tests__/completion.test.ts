@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { convertCompletionItem } from "../completion.js";
 import type * as LSP from "vscode-languageserver-protocol";
 import { CompletionItemKind } from "vscode-languageserver-protocol";
+import { sortCompletionItems } from "../completion.js";
 
 describe("convertCompletionItem", () => {
     it("should convert a basic completion item", () => {
@@ -177,5 +178,141 @@ describe("convertCompletionItem", () => {
         });
 
         expect(completion.apply).toBeDefined();
+    });
+});
+
+describe("sortCompletionItems", () => {
+    const createItem = (
+        label: string,
+        sortText?: string,
+    ): LSP.CompletionItem => ({
+        label,
+        sortText,
+    });
+
+    it("should sort by prefix match when matchBefore is provided", () => {
+        const items = [
+            createItem("zebra"),
+            createItem("alpha"),
+            createItem("test"),
+            createItem("testing"),
+        ];
+
+        const filtered = sortCompletionItems(items, "te", "javascript");
+        expect(filtered.map((i) => i.label)).toEqual(["test", "testing"]);
+
+        const sorted = sortCompletionItems(items, undefined, "javascript");
+        expect(sorted.map((i) => i.label)).toEqual([
+            "alpha",
+            "test",
+            "testing",
+            "zebra",
+        ]);
+    });
+
+    it("should use sortText over label when available", () => {
+        const items = [
+            createItem("zebra", "1"),
+            createItem("alpha", "2"),
+            createItem("test", "0"),
+        ];
+
+        const sorted = sortCompletionItems(items, undefined, "javascript");
+        expect(sorted.map((i) => i.label)).toEqual(["test", "zebra", "alpha"]);
+    });
+
+    it("should filter out non-matching items for word characters", () => {
+        const items = [
+            createItem("zebra"),
+            createItem("alpha"),
+            createItem("test"),
+            createItem("testing"),
+        ];
+
+        const sorted = sortCompletionItems(items, "al", "javascript");
+        expect(sorted.map((i) => i.label)).toEqual(["alpha"]);
+    });
+
+    it("should not filter for non-word characters", () => {
+        const items = [
+            createItem("zebra"),
+            createItem("alpha"),
+            createItem("test"),
+        ];
+
+        const sorted = sortCompletionItems(items, "@", "javascript");
+        expect(sorted.map((i) => i.label)).toEqual(["alpha", "test", "zebra"]);
+    });
+
+    it("should prioritize Python assignments", () => {
+        const items = [
+            createItem("value"),
+            createItem("name="),
+            createItem("test"),
+            createItem("id="),
+        ];
+
+        const sorted = sortCompletionItems(items, undefined, "python");
+        expect(sorted.map((i) => i.label)).toEqual([
+            "id=",
+            "name=",
+            "test",
+            "value",
+        ]);
+    });
+
+    it("should handle filterText in prefix matching", () => {
+        const items = [
+            { label: "display", filterText: "_display" },
+            { label: "test", filterText: "_test" },
+            { label: "alpha", filterText: "_alpha" },
+        ];
+
+        const sorted = sortCompletionItems(items, "_t", "javascript");
+        expect(sorted.map((i) => i.label)).toEqual(["test"]);
+    });
+
+    it("should handle empty matchBefore", () => {
+        const items = [
+            createItem("zebra"),
+            createItem("alpha"),
+            createItem("test"),
+        ];
+
+        const sorted = sortCompletionItems(items, undefined, "javascript");
+        expect(sorted.map((i) => i.label)).toEqual(["alpha", "test", "zebra"]);
+    });
+
+    it("should handle case insensitive matching", () => {
+        const items = [
+            createItem("Zebra"),
+            createItem("alpha"),
+            createItem("Test"),
+        ];
+
+        const filtered = sortCompletionItems(items, "te", "javascript");
+        expect(filtered.map((i) => i.label)).toEqual(["Test"]);
+
+        const sorted = sortCompletionItems(items, undefined, "javascript");
+        expect(sorted.map((i) => i.label)).toEqual(["alpha", "Test", "Zebra"]);
+    });
+
+    it("should sort underscores last", () => {
+        const items = [
+            { label: "alpha", sortText: "alpha" },
+            { label: "_hidden", sortText: "z_hidden" },
+            { label: "beta", sortText: "beta" },
+            { label: "__private", sortText: "zz__private" },
+            { label: "gamma", sortText: "gamma" },
+        ];
+
+        const sorted = sortCompletionItems(items, undefined, "javascript");
+        expect(sorted.map((i) => i.label)).toEqual([
+            "alpha",
+            "beta",
+            "gamma",
+            "_hidden",
+            "__private",
+        ]);
     });
 });

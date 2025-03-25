@@ -36,7 +36,7 @@ import {
     prefixMatch,
     showErrorMessage,
 } from "./utils.js";
-import { convertCompletionItem } from "./completion.js";
+import { convertCompletionItem, sortCompletionItems } from "./completion.js";
 
 const TIMEOUT = 10000;
 const CHANGES_DELAY = 500;
@@ -523,7 +523,7 @@ export class LanguageServerPlugin implements PluginValue {
             return null;
         }
 
-        let items = "items" in result ? result.items : result;
+        const items = "items" in result ? result.items : result;
 
         const [_span, match] = prefixMatch(items);
         if (!match) {
@@ -531,6 +531,12 @@ export class LanguageServerPlugin implements PluginValue {
         }
         const token = context.matchBefore(match);
         let { pos } = context;
+
+        const sortedItems = sortCompletionItems(
+            items,
+            token?.text,
+            this.languageId,
+        );
 
         // If we found a token that matches our completion pattern
         if (token) {
@@ -542,43 +548,9 @@ export class LanguageServerPlugin implements PluginValue {
             if (token.text.includes("(")) {
                 pos = token.from + token.text.indexOf("(") + 1;
             }
-
-            const word = token.text.toLowerCase();
-            // Only filter and sort for word characters
-            if (/^\w+$/.test(word)) {
-                // Filter items to only include those that start with the current word
-                items = items
-                    .filter(({ label, filterText }) => {
-                        const text = filterText ?? label;
-                        return text.toLowerCase().startsWith(word);
-                    })
-                    // Sort completion items:
-                    // 1. Prioritize items that start with the exact token text
-                    // 2. Otherwise maintain original order
-                    .sort((a, b) => {
-                        const aText = a.sortText ?? a.label;
-                        const bText = b.sortText ?? b.label;
-                        switch (true) {
-                            case aText.startsWith(token.text) &&
-                                !bText.startsWith(token.text):
-                                return -1;
-                            case !aText.startsWith(token.text) &&
-                                bText.startsWith(token.text):
-                                return 1;
-                        }
-                        return 0;
-                    });
-            }
-        } else {
-            // If no token was found, sort items alphabetically using their sortText or label
-            items = items.sort((a, b) => {
-                const aText = a.sortText ?? a.label;
-                const bText = b.sortText ?? b.label;
-                return aText.localeCompare(bText);
-            });
         }
 
-        const options = items.map((item) => {
+        const options = sortedItems.map((item) => {
             return convertCompletionItem(item, {
                 allowHTMLContent: this.allowHTMLContent,
                 hasResolveProvider:
