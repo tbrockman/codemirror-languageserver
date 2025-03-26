@@ -205,6 +205,5 @@ export function eventsFromChangeSet(doc: Text, changes: ChangeSet): LSP.TextDocu
             text,
         });
     });
-    console.log(events)
     return events;
 }

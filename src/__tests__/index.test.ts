@@ -1,11 +1,10 @@
 import { EditorState, Text } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import Client, { RequestManager, WebSocketTransport } from "@open-rpc/client-js";
+import { WebSocketTransport } from "@open-rpc/client-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CodeAction, CodeActionParams, Command, CompletionItem, CompletionList, CompletionParams, Definition, DefinitionParams, DidChangeTextDocumentParams, DidOpenTextDocumentParams, Hover, HoverParams, LocationLink, PrepareRenameParams, PrepareRenameResult, PublishDiagnosticsParams, RenameParams, SignatureHelp, SignatureHelpParams, WorkspaceEdit } from "vscode-languageserver-protocol";
+import type { CompletionItem, Definition, DidChangeTextDocumentParams, DidOpenTextDocumentParams, Hover } from "vscode-languageserver-protocol";
 import {
     LanguageServerClient,
-    LanguageServerPlugin,
     languageServer,
     languageServerWithClient,
 } from "../plugin";
