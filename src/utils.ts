@@ -1,4 +1,5 @@
 import type { Text } from "@codemirror/state";
+import { ChangeSet } from "@codemirror/state"
 import type { EditorView } from "@codemirror/view";
 import { marked } from "marked";
 import type * as LSP from "vscode-languageserver-protocol";
@@ -188,4 +189,22 @@ function isEmptyIshValue(value: unknown) {
         return value.trim() === "" || /^[\s\n`]*$/.test(value);
     }
     return false;
+}
+
+export function eventsFromChangeSet(doc: Text, changes: ChangeSet): LSP.TextDocumentContentChangeEvent[] {
+    const events: LSP.TextDocumentContentChangeEvent[] = [];
+
+    changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
+        const start = offsetToPos(doc, fromA);
+        const end = offsetToPos(doc, toA);
+        const text = inserted.toString();
+
+        events.push({
+            range: { start, end },
+            rangeLength: toA - fromA,
+            text,
+        });
+    });
+    console.log(events)
+    return events;
 }

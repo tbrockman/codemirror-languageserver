@@ -20,14 +20,21 @@ class MockTransport extends Transport {
 
 const transport = new MockTransport();
 
+class MockLanguageServerPlugin extends LanguageServerPlugin {
+    public applyRenameEdit(view: EditorView, edit: WorkspaceEdit | null): Promise<boolean> {
+        return super.applyRenameEdit(view, edit)
+    }
+}
+
 const featuresOptions: Required<FeatureOptions> = {
+    diagnosticsEnabled: true,
     hoverEnabled: true,
     completionEnabled: true,
     definitionEnabled: true,
     renameEnabled: true,
     codeActionsEnabled: true,
     signatureHelpEnabled: true,
-    diagnosticsEnabled: true,
+    signatureActivateOnTyping: false,
 };
 describe("LanguageServerClient initialization options", () => {
     it("uses default capabilities when none provided", async () => {
@@ -61,8 +68,6 @@ describe("LanguageServerClient initialization options", () => {
             transport,
             rootUri: "file:///root",
             workspaceFolders: [{ uri: "file:///root", name: "root" }],
-            documentUri: "file:///root/file.ts",
-            languageId: "typescript",
             capabilities: customCapabilities,
         });
 
@@ -290,7 +295,7 @@ it("applies rename changes correctly to a document", async () => {
         });
 
     // Create a mock plugin with access to the rename functionality
-    const mockPlugin = new LanguageServerPlugin(
+    const mockPlugin = new MockLanguageServerPlugin(
         client,
         "file:///root/file.ts",
         "typescript",
@@ -363,7 +368,7 @@ it("applies rename the whole cell", async () => {
     });
 
     // Create a mock plugin with access to the rename functionality
-    const mockPlugin = new LanguageServerPlugin(
+    const mockPlugin = new MockLanguageServerPlugin(
         client,
         "file:///root/file.ts",
         "typescript",
@@ -407,7 +412,7 @@ it("handles prepareRenameFallback", async () => {
         workspaceFolders: [{ uri: "file:///root", name: "root" }],
     });
 
-    const plugin = new LanguageServerPlugin(
+    const plugin = new MockLanguageServerPlugin(
         client,
         "file:///root/file.ts",
         "typescript",
