@@ -112,19 +112,17 @@ export class LanguageServerClient {
 
     private plugins: LanguageServerPlugin[];
 
-    constructor(options: LanguageServerClientOptions) {
-        ({
-            rootUri: this.rootUri,
-            workspaceFolders: this.workspaceFolders,
-            transport: this.transport,
-            autoClose: this.autoClose,
-            initializationOptions: this.initializationOptions,
-            capabilities: this.clientCapabilities,
-        } = options);
+    constructor({ rootUri, workspaceFolders, transport, autoClose, initializationOptions, capabilities, timeout = TIMEOUT }: LanguageServerClientOptions) {
+        this.rootUri = rootUri
+        this.workspaceFolders = workspaceFolders
+        this.transport = transport
+        this.autoClose = autoClose
+        this.initializationOptions = initializationOptions
+        this.clientCapabilities = capabilities
+        this.timeout = timeout
         this.ready = false;
         this.capabilities = null;
         this.plugins = [];
-        this.timeout = options.timeout || TIMEOUT;
         this.requestManager = new RequestManager([this.transport]);
         this.client = new Client(this.requestManager);
 
@@ -427,8 +425,12 @@ export class LanguageServerPlugin implements PluginValue {
         }
     }
 
-    public requestDiagnostics() {
-        this.sendChanges([]);
+    public requestDiagnostics(view: EditorView) {
+        this.sendChanges([
+            {
+                text: view.state.doc.toString()
+            }
+        ]);
     }
 
     public async requestHoverTooltip(
