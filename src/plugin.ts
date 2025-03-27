@@ -35,7 +35,6 @@ import {
     posToOffsetOrZero,
     prefixMatch,
     showErrorMessage,
-    calculateCompletionPosition,
 } from "./utils.js";
 import { convertCompletionItem, sortCompletionItems } from "./completion.js";
 
