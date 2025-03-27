@@ -350,32 +350,21 @@ export class LanguageServerClient {
 
 export class LanguageServerPlugin implements PluginValue {
     private documentVersion: number;
-    public client: LanguageServerClient;
-    public documentUri: string;
-    public languageId: string;
-    public view: EditorView;
-    public allowHTMLContent = false;
-    public featureOptions: Required<FeatureOptions>;
-    public onGoToDefinition: ((result: DefinitionResult) => void) | undefined;
 
     constructor(
-        client: LanguageServerClient,
-        documentUri: string,
-        languageId: string,
-        view: EditorView,
-        featureOptions: Required<FeatureOptions>,
-        allowHTMLContent = false,
-        onGoToDefinition?: (result: DefinitionResult) => void,
+        public client: LanguageServerClient,
+        public documentUri: string,
+        public languageId: string,
+        public view: EditorView,
+        public featureOptions: Required<FeatureOptions>,
+        public allowHTMLContent = false,
+        public onGoToDefinition?: (result: DefinitionResult) => void,
+        public renderMarkdown?: (content: LSP.MarkupContent
+            | LSP.MarkedString
+            | LSP.MarkedString[]) => string
     ) {
         this.documentVersion = 0;
-        this.client = client;
-        this.documentUri = documentUri;
-        this.languageId = languageId;
-        this.view = view;
-        this.allowHTMLContent = allowHTMLContent;
-        this.featureOptions = featureOptions;
-        this.onGoToDefinition = onGoToDefinition;
-
+        this.renderMarkdown = renderMarkdown || formatContents
         this.client.attachPlugin(this);
 
         this.initialize({
@@ -1260,49 +1249,44 @@ export class LanguageServerPlugin implements PluginValue {
         }
 
         // Handle documentChanges (preferred) if available
-        if (documentChanges.length > 0) {
-            for (const docChange of documentChanges) {
-                if ("textDocument" in docChange) {
-                    // This is a TextDocumentEdit
-                    const uri = docChange.textDocument.uri;
+        // if (documentChanges.length > 0) {
+        //     for (const docChange of documentChanges) {
+        //         if ("textDocument" in docChange) {
+        //             // This is a TextDocumentEdit
+        //             const uri = docChange.textDocument.uri;
 
-                    if (uri !== this.documentUri) {
-                        showErrorMessage(
-                            view,
-                            "Multi-file rename not supported yet",
-                        );
-                        continue;
-                    }
+        //             if (uri !== this.documentUri) {
+        //                 showErrorMessage(
+        //                     view,
+        //                     "Multi-file rename not supported yet",
+        //                 );
+        //                 continue;
+        //             }
 
-                    // Sort edits in reverse order to avoid position shifts
-                    const sortedEdits = docChange.edits.sort((a, b) => {
-                        const posA = posToOffset(view.state.doc, a.range.start);
-                        const posB = posToOffset(view.state.doc, b.range.start);
-                        return (posB ?? 0) - (posA ?? 0);
-                    });
+        //             // Create a single transaction with all changes
+        //             const changes = docChange.edits.map((edit) => ({
+        //                 from:
+        //                     posToOffset(view.state.doc, edit.range.start),
+        //                 to: posToOffset(view.state.doc, edit.range.end),
+        //                 insert: edit.newText,
+        //             }));
+        //             console.log({ changes })
 
-                    // Create a single transaction with all changes
-                    const changes = sortedEdits.map((edit) => ({
-                        from:
-                            posToOffset(view.state.doc, edit.range.start) ?? 0,
-                        to: posToOffset(view.state.doc, edit.range.end) ?? 0,
-                        insert: edit.newText,
-                    }));
+        //             // @ts-expect-error
+        //             view.dispatch(view.state.update({ changes }));
+        //             return true;
+        //         }
 
-                    view.dispatch(view.state.update({ changes }));
-                    return true;
-                }
-
-                // This is a CreateFile, RenameFile, or DeleteFile operation
-                showErrorMessage(
-                    view,
-                    "File creation, deletion, or renaming operations not supported yet",
-                );
-                return false;
-            }
-        }
+        //         // This is a CreateFile, RenameFile, or DeleteFile operation
+        //         showErrorMessage(
+        //             view,
+        //             "File creation, deletion, or renaming operations not supported yet",
+        //         );
+        //         return false;
+        //     }
+        // }
         // Fall back to changes if documentChanges is not available
-        else if (Object.keys(changesMap).length > 0) {
+        if (Object.keys(changesMap).length > 0) {
             // Apply all changes
             for (const [uri, changes] of Object.entries(changesMap)) {
                 if (uri !== this.documentUri) {
@@ -1312,22 +1296,16 @@ export class LanguageServerPlugin implements PluginValue {
                     );
                     continue;
                 }
-
-                // Sort changes in reverse order to avoid position shifts
-                const sortedChanges = changes.sort((a, b) => {
-                    const posA = posToOffset(view.state.doc, a.range.start);
-                    const posB = posToOffset(view.state.doc, b.range.start);
-                    return (posB ?? 0) - (posA ?? 0);
-                });
-
                 // Create a single transaction with all changes
-                const changeSpecs = sortedChanges.map((change) => ({
-                    from: posToOffset(view.state.doc, change.range.start) ?? 0,
-                    to: posToOffset(view.state.doc, change.range.end) ?? 0,
+                const changeSpecs = changes.map((change) => ({
+                    from: posToOffset(view.state.doc, change.range.start),
+                    to: posToOffset(view.state.doc, change.range.end),
                     insert: change.newText,
                 }));
 
-                view.dispatch(view.state.update({ changes: changeSpecs }));
+                console.log({ changeSpecs })
+                // @ts-expect-error
+                view.dispatch({ changes: changeSpecs });
             }
         }
 
@@ -1421,7 +1399,10 @@ interface LanguageServerOptions extends FeatureOptions {
     keyboardShortcuts?: KeyboardShortcuts;
     /** Callback triggered when a go-to-definition action is performed */
     onGoToDefinition?: (result: DefinitionResult) => void;
-
+    /** Function to customize any Markdown rendering, returns an HTML string */
+    renderMarkdown?: (content: LSP.MarkupContent
+        | LSP.MarkedString
+        | LSP.MarkedString[]) => string;
     /**
      * Configuration for the completion feature.
      * If not provided, the default completion config will be used.
@@ -1524,6 +1505,8 @@ export function languageServerWithClient(options: LanguageServerOptions) {
                         return false;
 
                     const pos = view.state.selection.main.head;
+
+                    console.log({ ['view.state.selection']: view.state.selection })
                     plugin.requestRename(
                         view,
                         offsetToPos(view.state.doc, pos),

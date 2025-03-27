@@ -201,7 +201,6 @@ export function eventsFromChangeSet(doc: Text, changes: ChangeSet): LSP.TextDocu
 
         events.push({
             range: { start, end },
-            rangeLength: toA - fromA,
             text,
         });
     });
