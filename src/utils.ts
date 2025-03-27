@@ -189,3 +189,29 @@ function isEmptyIshValue(value: unknown) {
     }
     return false;
 }
+
+/**
+ * Calculates the correct starting position for completion based on token content
+ * @param position Current cursor position
+ * @param token Optional completion token
+ * @returns The adjusted position for completion
+ */
+export function calculateCompletionPosition(
+    position: number,
+    token: { from: number; text: string } | null,
+): number {
+    if (!token) return position;
+
+    let pos = token.from;
+
+    // Find the last non-word character in the token
+    const nonWordMatches = [...token.text.matchAll(/\W/g)];
+    const lastNonWordMatch = nonWordMatches[nonWordMatches.length - 1];
+
+    // If we found a non-word character, adjust position to be after the last one
+    if (lastNonWordMatch && lastNonWordMatch.index !== undefined) {
+        pos = token.from + lastNonWordMatch.index + 1;
+    }
+
+    return pos;
+}

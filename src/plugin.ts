@@ -35,6 +35,7 @@ import {
     posToOffsetOrZero,
     prefixMatch,
     showErrorMessage,
+    calculateCompletionPosition,
 } from "./utils.js";
 import { convertCompletionItem, sortCompletionItems } from "./completion.js";
 
@@ -538,17 +539,7 @@ export class LanguageServerPlugin implements PluginValue {
             this.languageId,
         );
 
-        // If we found a token that matches our completion pattern
-        if (token) {
-            // Set position to the start of the token
-            pos = token.from;
-
-            // HACK: There might be a better place for this (like prefixMatch), but if the token includes an open `(`
-            // we should only replace after the open parenthesis, by bumping from.
-            if (token.text.includes("(")) {
-                pos = token.from + token.text.indexOf("(") + 1;
-            }
-        }
+        pos = calculateCompletionPosition(pos, token);
 
         const options = sortedItems.map((item) => {
             return convertCompletionItem(item, {

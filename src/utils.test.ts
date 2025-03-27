@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { prefixMatch } from "./utils";
 import type * as LSP from "vscode-languageserver-protocol";
+import { calculateCompletionPosition } from "./utils";
 
 describe("prefixMatch", () => {
     it("should handle empty items array", () => {
@@ -65,5 +66,39 @@ describe("prefixMatch", () => {
         expect(startMatch.test("$n")).toBe(true);
         expect(startMatch.test("$v")).toBe(true);
         expect(startMatch.test("#")).toBe(false);
+    });
+});
+
+describe("calculateCompletionPosition", () => {
+    const UNUSED_POSITION = 12345;
+
+    it("returns original position when no token provided", () => {
+        expect(calculateCompletionPosition(10, null)).toBe(10);
+        expect(calculateCompletionPosition(1000, null)).toBe(1000);
+    });
+
+    it("returns token.from when token has no non-word characters", () => {
+        const token = { from: 5, text: "hello" };
+        expect(calculateCompletionPosition(UNUSED_POSITION, token)).toBe(5);
+    });
+
+    it("adjusts position after dot in property access", () => {
+        const token = { from: 5, text: "foo.bar" };
+        expect(calculateCompletionPosition(UNUSED_POSITION, token)).toBe(9); // 5 + 3 + 1
+    });
+
+    it("adjusts position after slash in path", () => {
+        const token = { from: 0, text: "src/utils" };
+        expect(calculateCompletionPosition(UNUSED_POSITION, token)).toBe(4); // 0 + 3 + 1
+    });
+
+    it("adjusts position with multiple non-word characters", () => {
+        const token = { from: 0, text: "src/utils/index" };
+        expect(calculateCompletionPosition(UNUSED_POSITION, token)).toBe(10); // 0 + 9 + 1
+    });
+
+    it("adjusts position after comma in list", () => {
+        const token = { from: 10, text: "item1,item2" };
+        expect(calculateCompletionPosition(UNUSED_POSITION, token)).toBe(16); // 10 + 5 + 1
     });
 });
