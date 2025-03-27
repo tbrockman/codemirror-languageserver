@@ -526,7 +526,7 @@ export class LanguageServerPlugin implements PluginValue {
 
         const items = "items" in result ? result.items : result;
 
-        const [_span, match] = prefixMatch(items);
+        const match = prefixMatch(items);
         if (!match) {
             return null;
         }
@@ -539,7 +539,11 @@ export class LanguageServerPlugin implements PluginValue {
             this.languageId,
         );
 
-        pos = calculateCompletionPosition(pos, token);
+        // If we found a token that matches our completion pattern
+        if (token) {
+            // Set position to the start of the token
+            pos = token.from;
+        }
 
         const options = sortedItems.map((item) => {
             return convertCompletionItem(item, {
