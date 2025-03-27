@@ -339,14 +339,14 @@ describe("LanguageServer", () => {
     });
 
 
-    it.only('should send incremental changes on editorstate updates', async () => {
+    it.only('should send incremental/full changes on editorstate updates', async () => {
         const mockClient = createMockClient()
         const extensions = languageServerWithClient({
             client: mockClient as LanguageServerClient,
             documentUri: "file:///test/file.ts",
             languageId: "typescript",
         });
-        const doc = `
+        let doc = `
 const a = 'b';
 console.log(a)`
         const view = new EditorView({
@@ -394,22 +394,22 @@ console.log(a)`
         expect(mockClient.textDocumentDidChange).toHaveBeenCalledWith({
             textDocument: {
                 uri: "file:///test/file.ts",
-                version: 1,
+                version: 1, // Doc version should be incremented
             },
+            // Content changes should be in reverse order (by their position) to avoid offset shifting
             contentChanges: [
                 {
                     range: {
                         start: {
                             character: 0,
-                            line: 0
+                            line: 2
                         },
                         end: {
-                            character: 0,
-                            line: 0
+                            character: 8,
+                            line: 2
                         }
                     },
-                    rangeLength: 0,
-                    text: 'const c = "d"'
+                    text: ''
                 },
                 {
                     range: {
@@ -424,22 +424,41 @@ console.log(a)`
                             line: 1
                         }
                     },
-                    rangeLength: 3,
                     text: 'c'
                 },
                 {
                     range: {
                         start: {
                             character: 0,
-                            line: 2
+                            line: 0
                         },
                         end: {
-                            character: 8,
-                            line: 2
+                            character: 0,
+                            line: 0
                         }
                     },
-                    rangeLength: 8,
-                    text: ''
+                    text: 'const c = "d"'
+                },
+            ],
+        })
+
+        // Should send proper full replacement
+        doc = 'console.log("hello world")'
+        view.dispatch({
+            changes: [
+                { from: 0, to: view.state.doc.length, insert: doc },
+            ]
+        })
+
+        expect(mockClient.textDocumentDidChange).toHaveBeenCalledWith({
+            textDocument: {
+                uri: "file:///test/file.ts",
+                version: 2,
+            },
+            // Content changes should be in reverse order (by their position) to avoid offset shifting
+            contentChanges: [
+                {
+                    text: doc
                 }
             ],
         })
