@@ -1,4 +1,5 @@
 import type { Text } from "@codemirror/state";
+import { ChangeSet } from "@codemirror/state"
 import type { EditorView } from "@codemirror/view";
 import { marked } from "marked";
 import type * as LSP from "vscode-languageserver-protocol";
@@ -205,4 +206,39 @@ function isEmptyIshValue(value: unknown) {
         return value.trim() === "" || /^[\s\n`]*$/.test(value);
     }
     return false;
+}
+
+/**
+ * Map a `ChangeSet` into `TextDocumentContentChangeEvent[]` to be applied by an LSP
+ * @param doc The doc before applying the ChangeSet
+ * @param changes The `ChangeSet` to map
+ */
+export function eventsFromChangeSet(doc: Text, changes: ChangeSet): LSP.TextDocumentContentChangeEvent[] {
+    const events: {
+        range?: LSP.Range;
+        text: string;
+    }[] = [];
+
+    changes.iterChanges((fromA, toA, _, __, inserted) => {
+        const text = inserted.toString();
+        // Represents a full document change
+        if (fromA == 0 && toA == doc.length) {
+            events.push({ text })
+            return
+        }
+
+        // An incremental change event, converting (index) to (line, col)
+        const start = offsetToPos(doc, fromA);
+        const end = offsetToPos(doc, toA);
+        events.push({ range: { start, end }, text });
+    });
+
+    // Sort in reverse order to prevent index shift
+    events.sort((a, b) => {
+        if (a.range!.start.line !== b.range!.start.line) {
+            return b.range!.start.line - a.range!.start.line;
+        }
+        return b.range!.start.character - a.range!.start.character;
+    });
+    return events;
 }

@@ -28,6 +28,7 @@ import type { PublishDiagnosticsParams } from "vscode-languageserver-protocol";
 import type * as LSP from "vscode-languageserver-protocol";
 import { documentUri, languageId } from "./config.js";
 import {
+    eventsFromChangeSet,
     formatContents,
     isEmptyDocumentation,
     offsetToPos,
@@ -39,7 +40,6 @@ import {
 import { convertCompletionItem, sortCompletionItems } from "./completion.js";
 
 const TIMEOUT = 10000;
-const CHANGES_DELAY = 500;
 
 const logger = console.log;
 
@@ -102,6 +102,7 @@ export class LanguageServerClient {
     private rootUri: string;
     private workspaceFolders: LSP.WorkspaceFolder[] | null;
     private autoClose?: boolean;
+    private timeout: number;
 
     private transport: Transport;
     private requestManager: RequestManager;
@@ -111,16 +112,17 @@ export class LanguageServerClient {
 
     private plugins: LanguageServerPlugin[];
 
-    constructor(options: LanguageServerClientOptions) {
+    constructor({ rootUri, workspaceFolders, transport, autoClose, initializationOptions, capabilities, timeout = TIMEOUT }: LanguageServerClientOptions) {
+        this.rootUri = rootUri
+        this.workspaceFolders = workspaceFolders
+        this.transport = transport
+        this.autoClose = autoClose
+        this.initializationOptions = initializationOptions
+        this.clientCapabilities = capabilities
+        this.timeout = timeout
         this.ready = false;
         this.capabilities = null;
-        this.rootUri = options.rootUri;
-        this.workspaceFolders = options.workspaceFolders;
-        this.autoClose = options.autoClose;
         this.plugins = [];
-        this.transport = options.transport;
-        this.initializationOptions = options.initializationOptions;
-        this.clientCapabilities = options.capabilities;
         this.requestManager = new RequestManager([this.transport]);
         this.client = new Client(this.requestManager);
 
@@ -250,7 +252,7 @@ export class LanguageServerClient {
         const { capabilities } = await this.request(
             "initialize",
             this.getInitializationOptions(),
-            TIMEOUT * 3,
+            this.timeout * 3,
         );
         this.capabilities = capabilities;
         this.notify("initialized", {});
@@ -270,34 +272,34 @@ export class LanguageServerClient {
     }
 
     public async textDocumentHover(params: LSP.HoverParams) {
-        return await this.request("textDocument/hover", params, TIMEOUT);
+        return await this.request("textDocument/hover", params, this.timeout);
     }
 
     public async textDocumentCompletion(params: LSP.CompletionParams) {
-        return await this.request("textDocument/completion", params, TIMEOUT);
+        return await this.request("textDocument/completion", params, this.timeout);
     }
 
     public async completionItemResolve(item: LSP.CompletionItem) {
-        return await this.request("completionItem/resolve", item, TIMEOUT);
+        return await this.request("completionItem/resolve", item, this.timeout);
     }
 
     public async textDocumentDefinition(params: LSP.DefinitionParams) {
-        return await this.request("textDocument/definition", params, TIMEOUT);
+        return await this.request("textDocument/definition", params, this.timeout);
     }
 
     public async textDocumentCodeAction(params: LSP.CodeActionParams) {
-        return await this.request("textDocument/codeAction", params, TIMEOUT);
+        return await this.request("textDocument/codeAction", params, this.timeout);
     }
 
     public async textDocumentRename(params: LSP.RenameParams) {
-        return await this.request("textDocument/rename", params, TIMEOUT);
+        return await this.request("textDocument/rename", params, this.timeout);
     }
 
     public async textDocumentPrepareRename(params: LSP.PrepareRenameParams) {
         return await this.request(
             "textDocument/prepareRename",
             params,
-            TIMEOUT,
+            this.timeout,
         );
     }
 
@@ -305,7 +307,7 @@ export class LanguageServerClient {
         return await this.request(
             "textDocument/signatureHelp",
             params,
-            TIMEOUT,
+            this.timeout,
         );
     }
 
@@ -348,7 +350,6 @@ export class LanguageServerClient {
 
 export class LanguageServerPlugin implements PluginValue {
     private documentVersion: number;
-    private changesTimeout: number;
     public client: LanguageServerClient;
     public documentUri: string;
     public languageId: string;
@@ -367,7 +368,6 @@ export class LanguageServerPlugin implements PluginValue {
         onGoToDefinition?: (result: DefinitionResult) => void,
     ) {
         this.documentVersion = 0;
-        this.changesTimeout = 0;
         this.client = client;
         this.documentUri = documentUri;
         this.languageId = languageId;
@@ -383,18 +383,11 @@ export class LanguageServerPlugin implements PluginValue {
         });
     }
 
-    public update({ docChanged }: ViewUpdate) {
+    public update({ docChanged, startState: { doc }, changes }: ViewUpdate) {
         if (!docChanged) {
             return;
         }
-        if (this.changesTimeout) {
-            clearTimeout(this.changesTimeout);
-        }
-        this.changesTimeout = self.setTimeout(() => {
-            this.sendChange({
-                documentText: this.view.state.doc.toString(),
-            });
-        }, CHANGES_DELAY);
+        this.sendChanges(eventsFromChangeSet(doc, changes));
     }
 
     public destroy() {
@@ -405,7 +398,7 @@ export class LanguageServerPlugin implements PluginValue {
         if (this.client.initializePromise) {
             await this.client.initializePromise;
         }
-        this.client.textDocumentDidOpen({
+        await this.client.textDocumentDidOpen({
             textDocument: {
                 uri: this.documentUri,
                 languageId: this.languageId,
@@ -415,7 +408,7 @@ export class LanguageServerPlugin implements PluginValue {
         });
     }
 
-    public async sendChange({ documentText }: { documentText: string }) {
+    public async sendChanges(contentChanges: LSP.TextDocumentContentChangeEvent[]) {
         if (!this.client.ready) {
             return;
         }
@@ -423,9 +416,9 @@ export class LanguageServerPlugin implements PluginValue {
             await this.client.textDocumentDidChange({
                 textDocument: {
                     uri: this.documentUri,
-                    version: this.documentVersion++,
+                    version: ++this.documentVersion,
                 },
-                contentChanges: [{ text: documentText }],
+                contentChanges,
             });
         } catch (e) {
             console.error(e);
@@ -433,7 +426,11 @@ export class LanguageServerPlugin implements PluginValue {
     }
 
     public requestDiagnostics(view: EditorView) {
-        this.sendChange({ documentText: view.state.doc.toString() });
+        this.sendChanges([
+            {
+                text: view.state.doc.toString()
+            }
+        ]);
     }
 
     public async requestHoverTooltip(
@@ -449,7 +446,6 @@ export class LanguageServerPlugin implements PluginValue {
             return null;
         }
 
-        this.sendChange({ documentText: view.state.doc.toString() });
         const result = await this.client.textDocumentHover({
             textDocument: { uri: this.documentUri },
             position: { line, character },
@@ -506,9 +502,6 @@ export class LanguageServerPlugin implements PluginValue {
         ) {
             return null;
         }
-        this.sendChange({
-            documentText: context.state.doc.toString(),
-        });
 
         const result = await this.client.textDocumentCompletion({
             textDocument: { uri: this.documentUri },
@@ -649,12 +642,12 @@ export class LanguageServerPlugin implements PluginValue {
         }
 
         const severityMap: Record<DiagnosticSeverity, Diagnostic["severity"]> =
-            {
-                [DiagnosticSeverity.Error]: "error",
-                [DiagnosticSeverity.Warning]: "warning",
-                [DiagnosticSeverity.Information]: "info",
-                [DiagnosticSeverity.Hint]: "info",
-            };
+        {
+            [DiagnosticSeverity.Error]: "error",
+            [DiagnosticSeverity.Warning]: "warning",
+            [DiagnosticSeverity.Information]: "info",
+            [DiagnosticSeverity.Hint]: "info",
+        };
 
         const diagnostics = params.diagnostics.map(
             async ({ range, message, severity, code }) => {
@@ -666,7 +659,7 @@ export class LanguageServerPlugin implements PluginValue {
                     (action): Action => ({
                         name:
                             "command" in action &&
-                            typeof action.command === "object"
+                                typeof action.command === "object"
                                 ? action.command?.title || action.title
                                 : action.title,
                         apply: async () => {
@@ -921,9 +914,6 @@ export class LanguageServerPlugin implements PluginValue {
         }
 
         try {
-            // Send the current document state
-            this.sendChange({ documentText: view.state.doc.toString() });
-
             // Request signature help
             const result = await this.client.textDocumentSignatureHelp({
                 textDocument: { uri: this.documentUri },
@@ -1243,7 +1233,7 @@ export class LanguageServerPlugin implements PluginValue {
      * @param edit The workspace edit to apply
      * @returns True if changes were applied successfully
      */
-    private async applyRenameEdit(
+    protected async applyRenameEdit(
         view: EditorView,
         edit: LSP.WorkspaceEdit | null,
     ): Promise<boolean> {
@@ -1351,15 +1341,17 @@ interface LanguageServerClientOptions {
     transport: Transport;
     /** Whether to automatically close the connection when the editor is destroyed */
     autoClose?: boolean;
+    /** Timeout for requests to the language server */
+    timeout?: number;
     /**
      * Client capabilities to send to the server during initialization.
      * Can be an object or a function that modifies the default capabilities.
      */
     capabilities?:
-        | LSP.InitializeParams["capabilities"]
-        | ((
-              defaultCapabilities: LSP.InitializeParams["capabilities"],
-          ) => LSP.InitializeParams["capabilities"]);
+    | LSP.InitializeParams["capabilities"]
+    | ((
+        defaultCapabilities: LSP.InitializeParams["capabilities"],
+    ) => LSP.InitializeParams["capabilities"]);
     /** Additional initialization options to send to the language server */
     initializationOptions?: LSP.InitializeParams["initializationOptions"];
 }
@@ -1447,7 +1439,7 @@ interface LanguageServerOptions extends FeatureOptions {
  */
 interface LanguageServerWebsocketOptions
     extends Omit<LanguageServerOptions, "client">,
-        Omit<LanguageServerClientOptions, "transport"> {
+    Omit<LanguageServerClientOptions, "transport"> {
     /** WebSocket URI for connecting to the language server */
     serverUri: `ws://${string}` | `wss://${string}`;
 }
