@@ -62,50 +62,67 @@ export function formatContents(
     }
     return "";
 }
+
 /**
- * Converts a Set of characters into a regex character class string.
- * Words get grouped together with `\w`.
+ * Finds the longest common prefix among an array of strings.
  *
- * @param chars - Set of characters to convert
- * @returns A string representing a regex character class.
+ * @param strs - Array of strings to analyze
+ * @returns The longest common prefix string
  */
-function toSet(chars: Set<string>) {
-    let preamble = "";
-    let flat = Array.from(chars).join("");
-    const words = /\w/.test(flat);
-    if (words) {
-        preamble += "\\w";
-        flat = flat.replace(/\w/g, "");
+function longestCommonPrefix(strs: string[]): string {
+    if (strs.length === 0) return "";
+    if (strs.length === 1) return strs[0] || "";
+
+    // Sort the array
+    strs.sort();
+
+    // Get the first and last string after sorting
+    const firstStr = strs[0] || "";
+    const lastStr = strs[strs.length - 1] || "";
+
+    // Find the common prefix between the first and last string
+    let i = 0;
+    while (i < firstStr.length && firstStr[i] === lastStr[i]) {
+        i++;
     }
-    return `[${preamble}${flat.replace(/[^\w\s]/g, "\\$&")}]`;
+
+    return firstStr.substring(0, i);
 }
 
 /**
- * Analyzes completion items to generate regex patterns for matching prefixes.
+ * Analyzes completion items to generate a regex pattern for matching prefixes.
  * Used to determine what text should be considered part of the current token
  * when filtering completion items.
  *
  * @param items - Array of LSP completion items to analyze
- * @returns A tuple of two RegExp objects:
- *   1. A pattern that matches from the start of a string
- *   2. A pattern that matches anywhere in a string
+ * @returns A RegExp object that matches anywhere in a string
  */
 export function prefixMatch(items: LSP.CompletionItem[]) {
-    const first = new Set<string>();
-    const rest = new Set<string>();
-
-    for (const item of items) {
-        const [initial, ...restStr] = item.textEdit?.newText || item.label;
-        if (initial) {
-            first.add(initial);
-        }
-        for (const char of restStr) {
-            rest.add(char);
-        }
+    if (items.length === 0) {
+        return undefined;
     }
 
-    const source = `${toSet(first) + toSet(rest)}*$`;
-    return [new RegExp(`^${source}`), new RegExp(source)];
+    const labels = items.map((item) => item.textEdit?.newText || item.label);
+    const prefix = longestCommonPrefix(labels);
+
+    if (prefix === "") {
+        return undefined;
+    }
+
+    const explodedPrefixes: string[] = [];
+    for (let i = 0; i < prefix.length; i++) {
+        const slice = prefix.slice(0, i + 1);
+        if (slice.length > 0) {
+            // Escape special regex characters to avoid pattern errors
+            const escapedSlice = slice.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            explodedPrefixes.push(escapedSlice);
+        }
+    }
+    const orPattern = explodedPrefixes.join("|");
+    // Create regex pattern that matches the common prefix for each possible prefix by dropping the last character
+    const pattern = new RegExp(`(${orPattern})$`);
+
+    return pattern;
 }
 
 export function isLSPTextEdit(
@@ -189,32 +206,6 @@ function isEmptyIshValue(value: unknown) {
         return value.trim() === "" || /^[\s\n`]*$/.test(value);
     }
     return false;
-}
-
-/**
- * Calculates the correct starting position for completion based on token content
- * @param position Current cursor position
- * @param token Optional completion token
- * @returns The adjusted position for completion
- */
-export function calculateCompletionPosition(
-    position: number,
-    token: { from: number; text: string } | null,
-): number {
-    if (!token) return position;
-
-    let pos = token.from;
-
-    // Find the last non-word character in the token
-    const nonWordMatches = [...token.text.matchAll(/\W/g)];
-    const lastNonWordMatch = nonWordMatches[nonWordMatches.length - 1];
-
-    // If we found a non-word character, adjust position to be after the last one
-    if (lastNonWordMatch && lastNonWordMatch.index !== undefined) {
-        pos = token.from + lastNonWordMatch.index + 1;
-    }
-
-    return pos;
 }
 
 /**

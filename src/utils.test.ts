@@ -1,104 +1,243 @@
 import { describe, it, expect } from "vitest";
 import { prefixMatch } from "./utils";
 import type * as LSP from "vscode-languageserver-protocol";
-import { calculateCompletionPosition } from "./utils";
+import { EditorState } from "@codemirror/state";
+import { CompletionContext } from "@codemirror/autocomplete";
+
+function createItems(labels: string[]): LSP.CompletionItem[] {
+    return labels.map((label) => ({ label }));
+}
+
+function invariant(condition: boolean, message: string): asserts condition {
+    if (!condition) {
+        throw new Error(message);
+    }
+}
+
+function createMockContext(text: string) {
+    return new CompletionContext(
+        EditorState.create({ doc: text }),
+        text.length,
+        false,
+    );
+}
 
 describe("prefixMatch", () => {
     it("should handle empty items array", () => {
-        const [startMatch, anywhereMatch] = prefixMatch([]);
-        expect(startMatch.test("")).toBe(false);
-        expect(anywhereMatch.test("")).toBe(false);
+        const pattern = prefixMatch([]);
+        expect(pattern).toBeUndefined();
     });
 
-    it("should match single character prefixes", () => {
-        const items: LSP.CompletionItem[] = [
-            { label: "a" },
-            { label: "b" },
-            { label: "c" },
-        ];
-        const [startMatch, anywhereMatch] = prefixMatch(items);
-
-        expect(startMatch.test("a")).toBe(true);
-        expect(startMatch.test("b")).toBe(true);
-        expect(startMatch.test("c")).toBe(true);
-        expect(startMatch.test("d")).toBe(true);
-
-        expect(anywhereMatch.test("xa")).toBe(true);
-        expect(anywhereMatch.test("xb")).toBe(true);
-        expect(anywhereMatch.test("xc")).toBe(true);
-        expect(anywhereMatch.test("xd")).toBe(true);
+    it("should handle no prefix", () => {
+        const items = createItems(["foo", "bar"]);
+        const pattern = prefixMatch(items);
+        expect(pattern).toBeUndefined();
     });
 
-    it("should handle textEdit items", () => {
-        const items: LSP.CompletionItem[] = [
-            { textEdit: { newText: "function" } },
-            { textEdit: { newText: "for" } },
-        ];
-        const [startMatch] = prefixMatch(items);
+    it("should match basic prefixes", () => {
+        const items = createItems(["foo/", "foo.py", "foo.txt", "foo.md"]);
+        const context = createMockContext("foo");
+        const pattern = prefixMatch(items);
+        invariant(pattern !== undefined, "pattern should not be undefined");
+        expect(context.matchBefore(pattern)).toEqual({
+            from: 0,
+            to: 3,
+            text: "foo",
+        });
+    });
 
-        expect(startMatch.test("f")).toBe(true);
-        expect(startMatch.test("fu")).toBe(true);
-        expect(startMatch.test("fo")).toBe(true);
-        expect(startMatch.test("g")).toBe(true);
+    it("should when includes a slash", () => {
+        const items = createItems(["foo/", "foo.py", "foo.txt", "foo.md"]);
+        const context = createMockContext("path/to/foo");
+        const pattern = prefixMatch(items);
+        invariant(pattern !== undefined, "pattern should not be undefined");
+        expect(context.matchBefore(pattern)).toEqual({
+            from: 8,
+            to: 11,
+            text: "foo",
+        });
+    });
+
+    it("should match when includes a dot", () => {
+        const items = createItems(["foo.py", "foo.txt", "foo.md"]);
+        const context = createMockContext("path/to/foo.");
+        const pattern = prefixMatch(items);
+        invariant(pattern !== undefined, "pattern should not be undefined");
+        expect(context.matchBefore(pattern)).toEqual({
+            from: 8,
+            to: 12,
+            text: "foo.",
+        });
+    });
+
+    it("should match when contains multiple matches", () => {
+        const items = createItems(["foo.py", "foo.txt", "foo.md"]);
+        const context = createMockContext("foo/foo/foo");
+        const pattern = prefixMatch(items);
+        invariant(pattern !== undefined, "pattern should not be undefined");
+        expect(context.matchBefore(pattern)).toEqual({
+            from: 8,
+            to: 11,
+            text: "foo",
+        });
+    });
+
+    it("should match when contains ends with a slash", () => {
+        const items = createItems(["foo/", "foo.py", "foo.txt", "foo.md"]);
+        const context = createMockContext("path/to/");
+        const pattern = prefixMatch(items);
+        invariant(pattern !== undefined, "pattern should not be undefined");
+        expect(context.matchBefore(pattern)).toEqual(null);
+    });
+
+    it("should handle shared prefixes", () => {
+        const items = createItems(["for", "function"]);
+        const pattern = prefixMatch(items);
+        invariant(pattern !== undefined, "pattern should not be undefined");
+        const context = createMockContext("f");
+        expect(context.matchBefore(pattern)).toEqual({
+            from: 0,
+            to: 1,
+            text: "f",
+        });
+    });
+
+    it("should handle shared prefixes with different match before", () => {
+        const items = createItems(["for", "function"]);
+        const pattern = prefixMatch(items);
+        invariant(pattern !== undefined, "pattern should not be undefined");
+        const context = createMockContext("for");
+        expect(context.matchBefore(pattern)).toEqual(null);
+    });
+
+    it("should handle when common prefix is more than what was typed", () => {
+        const items = createItems(["foobar", "foobaz"]);
+        const pattern = prefixMatch(items);
+        invariant(pattern !== undefined, "pattern should not be undefined");
+        expect(createMockContext("fo").matchBefore(pattern)).toEqual({
+            from: 0,
+            to: 2,
+            text: "fo",
+        });
+        expect(createMockContext("f").matchBefore(pattern)).toEqual({
+            from: 0,
+            to: 1,
+            text: "f",
+        });
     });
 
     it("should handle mixed word and non-word characters", () => {
-        const items: LSP.CompletionItem[] = [
-            { label: "user.name" },
-            { label: "user.email" },
-        ];
-        const [startMatch, anywhereMatch] = prefixMatch(items);
-
-        expect(startMatch.test("user")).toBe(true);
-        expect(startMatch.test("user.")).toBe(true);
-        expect(startMatch.test("user.n")).toBe(true);
-        expect(startMatch.test("user@")).toBe(false);
+        const items = createItems(["user.name", "user.email"]);
+        const pattern = prefixMatch(items);
+        invariant(pattern !== undefined, "pattern should not be undefined");
+        expect(createMockContext("user").matchBefore(pattern)).toEqual({
+            from: 0,
+            to: 4,
+            text: "user",
+        });
+        expect(createMockContext("user.").matchBefore(pattern)).toEqual({
+            from: 0,
+            to: 5,
+            text: "user.",
+        });
+        expect(createMockContext("u").matchBefore(pattern)).toEqual({
+            from: 0,
+            to: 1,
+            text: "u",
+        });
+        expect(createMockContext("foo/").matchBefore(pattern)).toEqual(null);
+        expect(createMockContext("foo/us").matchBefore(pattern)).toEqual({
+            from: 4,
+            to: 6,
+            text: "us",
+        });
+        expect(createMockContext("obj.property(").matchBefore(pattern)).toEqual(
+            null,
+        );
+        expect(
+            createMockContext("obj.property(us").matchBefore(pattern),
+        ).toEqual({
+            from: 13,
+            to: 15,
+            text: "us",
+        });
     });
 
     it("should handle special characters", () => {
-        const items: LSP.CompletionItem[] = [
-            { label: "$name" },
-            { label: "$value" },
-        ];
-        const [startMatch, anywhereMatch] = prefixMatch(items);
-
-        expect(startMatch.test("$")).toBe(true);
-        expect(startMatch.test("$n")).toBe(true);
-        expect(startMatch.test("$v")).toBe(true);
-        expect(startMatch.test("#")).toBe(false);
-    });
-});
-
-describe("calculateCompletionPosition", () => {
-    const UNUSED_POSITION = 12345;
-
-    it("returns original position when no token provided", () => {
-        expect(calculateCompletionPosition(10, null)).toBe(10);
-        expect(calculateCompletionPosition(1000, null)).toBe(1000);
+        const items = createItems(["$name", "$value"]);
+        const pattern = prefixMatch(items);
+        invariant(pattern !== undefined, "pattern should not be undefined");
+        expect(createMockContext("$").matchBefore(pattern)).toEqual({
+            from: 0,
+            to: 1,
+            text: "$",
+        });
+        expect(createMockContext("$item.$").matchBefore(pattern)).toEqual({
+            from: 6,
+            to: 7,
+            text: "$",
+        });
+        expect(createMockContext("$item.$name").matchBefore(pattern)).toEqual(
+            null,
+        );
     });
 
-    it("returns token.from when token has no non-word characters", () => {
-        const token = { from: 5, text: "hello" };
-        expect(calculateCompletionPosition(UNUSED_POSITION, token)).toBe(5);
+    it("should handle empty items array", () => {
+        const items: LSP.CompletionItem[] = [];
+        const pattern = prefixMatch(items);
+        expect(pattern).toBeUndefined();
     });
 
-    it("adjusts position after dot in property access", () => {
-        const token = { from: 5, text: "foo.bar" };
-        expect(calculateCompletionPosition(UNUSED_POSITION, token)).toBe(9); // 5 + 3 + 1
+    it("should handle items with no common prefix", () => {
+        const items = createItems(["apple", "banana", "cherry"]);
+        const pattern = prefixMatch(items);
+        expect(pattern).toBeUndefined();
     });
 
-    it("adjusts position after slash in path", () => {
-        const token = { from: 0, text: "src/utils" };
-        expect(calculateCompletionPosition(UNUSED_POSITION, token)).toBe(4); // 0 + 3 + 1
+    it("should handle items with partial common prefix", () => {
+        const items = createItems(["prefix_one", "prefix_two", "prefix_three"]);
+        const pattern = prefixMatch(items);
+        invariant(pattern !== undefined, "pattern should not be undefined");
+        expect(createMockContext("prefix_").matchBefore(pattern)).toEqual({
+            from: 0,
+            to: 7,
+            text: "prefix_",
+        });
+        expect(createMockContext("pre").matchBefore(pattern)).toEqual({
+            from: 0,
+            to: 3,
+            text: "pre",
+        });
     });
 
-    it("adjusts position with multiple non-word characters", () => {
-        const token = { from: 0, text: "src/utils/index" };
-        expect(calculateCompletionPosition(UNUSED_POSITION, token)).toBe(10); // 0 + 9 + 1
+    it("should handle regex special characters in prefixes", () => {
+        const items = createItems(["user.*", "user.+", "user.?"]);
+        const pattern = prefixMatch(items);
+        invariant(pattern !== undefined, "pattern should not be undefined");
+        expect(createMockContext("user.").matchBefore(pattern)).toEqual({
+            from: 0,
+            to: 5,
+            text: "user.",
+        });
+        expect(createMockContext("user.*").matchBefore(pattern)).toEqual(null);
     });
 
-    it("adjusts position after comma in list", () => {
-        const token = { from: 10, text: "item1,item2" };
-        expect(calculateCompletionPosition(UNUSED_POSITION, token)).toBe(16); // 10 + 5 + 1
+    it("should match at different positions in text", () => {
+        const items = createItems(["test"]);
+        const pattern = prefixMatch(items);
+        invariant(pattern !== undefined, "pattern should not be undefined");
+        expect(createMockContext("some test").matchBefore(pattern)).toEqual({
+            from: 5,
+            to: 9,
+            text: "test",
+        });
+        expect(createMockContext("function(te").matchBefore(pattern)).toEqual({
+            from: 9,
+            to: 11,
+            text: "te",
+        });
+        expect(createMockContext("obj.function(").matchBefore(pattern)).toEqual(
+            null,
+        );
     });
 });
