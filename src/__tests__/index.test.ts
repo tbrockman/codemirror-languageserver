@@ -2,7 +2,13 @@ import { EditorState, Text } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { WebSocketTransport } from "@open-rpc/client-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CompletionItem, Definition, DidChangeTextDocumentParams, DidOpenTextDocumentParams, Hover } from "vscode-languageserver-protocol";
+import type {
+    CompletionItem,
+    Definition,
+    DidChangeTextDocumentParams,
+    DidOpenTextDocumentParams,
+    Hover,
+} from "vscode-languageserver-protocol";
 import {
     LanguageServerClient,
     languageServer,
@@ -22,7 +28,9 @@ vi.mock("@open-rpc/client-js", () => ({
     RequestManager: vi.fn(),
 }));
 
-const createMockClient = (init?: Partial<LanguageServerClient>): LanguageServerClient => {
+const createMockClient = (
+    init?: Partial<LanguageServerClient>,
+): LanguageServerClient => {
     const mockClient = {
         ready: true,
         capabilities: { definitionProvider: true },
@@ -32,8 +40,12 @@ const createMockClient = (init?: Partial<LanguageServerClient>): LanguageServerC
         close: vi.fn(),
         attachPlugin: vi.fn(),
         detachPlugin: vi.fn(),
-        textDocumentDidOpen: vi.fn().mockResolvedValue({} as DidOpenTextDocumentParams),
-        textDocumentDidChange: vi.fn().mockResolvedValue({} as DidChangeTextDocumentParams),
+        textDocumentDidOpen: vi
+            .fn()
+            .mockResolvedValue({} as DidOpenTextDocumentParams),
+        textDocumentDidChange: vi
+            .fn()
+            .mockResolvedValue({} as DidChangeTextDocumentParams),
         textDocumentHover: vi.fn().mockResolvedValue({} as Hover),
         textDocumentCompletion: vi.fn().mockResolvedValue(null),
         completionItemResolve: vi.fn().mockResolvedValue({} as CompletionItem),
@@ -45,7 +57,7 @@ const createMockClient = (init?: Partial<LanguageServerClient>): LanguageServerC
         ...init,
     };
     return mockClient as LanguageServerClient;
-}
+};
 
 describe("LanguageServer", () => {
     describe("Utility Functions", () => {
@@ -202,8 +214,8 @@ describe("LanguageServer", () => {
             const mockClient = createMockClient({
                 textDocumentDefinition: vi
                     .fn()
-                    .mockResolvedValue(mockDefinitionResult)
-            })
+                    .mockResolvedValue(mockDefinitionResult),
+            });
 
             // Create a mock EditorView with the necessary methods
             const mockDoc = Text.of(["test document"]);
@@ -338,9 +350,8 @@ describe("LanguageServer", () => {
         });
     });
 
-
-    it.only('should send incremental/full changes on editorstate updates', async () => {
-        const mockClient = createMockClient()
+    it("should send incremental/full changes on editorstate updates", async () => {
+        const mockClient = createMockClient();
         const extensions = languageServerWithClient({
             client: mockClient as LanguageServerClient,
             documentUri: "file:///test/file.ts",
@@ -348,15 +359,15 @@ describe("LanguageServer", () => {
         });
         let doc = `
 const a = 'b';
-console.log(a)`
+console.log(a)`;
         const view = new EditorView({
             parent: document.body,
             state: EditorState.create({
                 doc,
-                extensions
+                extensions,
             }),
         });
-        view.dispatch()
+        view.dispatch();
 
         const viewPluginExt = extensions.find(
             (ext) => ext && typeof ext === "object" && "create" in ext,
@@ -364,7 +375,7 @@ console.log(a)`
 
         if (viewPluginExt && "create" in viewPluginExt) {
             // @ts-expect-error
-            viewPluginExt.create(view)
+            viewPluginExt.create(view);
         }
 
         await mockClient.initializePromise;
@@ -375,20 +386,20 @@ console.log(a)`
                 uri: "file:///test/file.ts",
                 version: 0,
                 text: doc,
-                languageId: 'typescript'
+                languageId: "typescript",
             },
-        })
+        });
 
         view.dispatch({
             changes: [
                 // an insertion
                 { from: 0, insert: 'const c = "d"' },
                 // a replacement
-                { from: 11, to: 14, insert: 'c' },
+                { from: 11, to: 14, insert: "c" },
                 // a deletion
-                { from: 16, to: 24 }
-            ]
-        })
+                { from: 16, to: 24 },
+            ],
+        });
 
         // Make sure we sent the correct changes based on the changeset
         expect(mockClient.textDocumentDidChange).toHaveBeenCalledWith({
@@ -402,53 +413,51 @@ console.log(a)`
                     range: {
                         start: {
                             character: 0,
-                            line: 2
+                            line: 2,
                         },
                         end: {
                             character: 8,
-                            line: 2
-                        }
+                            line: 2,
+                        },
                     },
-                    text: ''
+                    text: "",
                 },
                 {
                     range: {
                         // 11 = 10 cols + 1 newline
                         start: {
                             character: 10,
-                            line: 1
+                            line: 1,
                         },
                         // 14 = 13 cols + 1 newline
                         end: {
                             character: 13,
-                            line: 1
-                        }
+                            line: 1,
+                        },
                     },
-                    text: 'c'
+                    text: "c",
                 },
                 {
                     range: {
                         start: {
                             character: 0,
-                            line: 0
+                            line: 0,
                         },
                         end: {
                             character: 0,
-                            line: 0
-                        }
+                            line: 0,
+                        },
                     },
-                    text: 'const c = "d"'
+                    text: 'const c = "d"',
                 },
             ],
-        })
+        });
 
         // Should send proper full replacement
-        doc = 'console.log("hello world")'
+        doc = 'console.log("hello world")';
         view.dispatch({
-            changes: [
-                { from: 0, to: view.state.doc.length, insert: doc },
-            ]
-        })
+            changes: [{ from: 0, to: view.state.doc.length, insert: doc }],
+        });
 
         expect(mockClient.textDocumentDidChange).toHaveBeenCalledWith({
             textDocument: {
@@ -458,11 +467,11 @@ console.log(a)`
             // Content changes should be in reverse order (by their position) to avoid offset shifting
             contentChanges: [
                 {
-                    text: doc
-                }
+                    text: doc,
+                },
             ],
-        })
-    })
+        });
+    });
 });
 
 describe("exports", () => {
