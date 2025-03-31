@@ -78,11 +78,13 @@ interface LSPNotifyMap {
     initialized: LSP.InitializedParams;
     "textDocument/didChange": LSP.DidChangeTextDocumentParams;
     "textDocument/didOpen": LSP.DidOpenTextDocumentParams;
+    "textDocument/didClose": LSP.DidCloseTextDocumentParams;
 }
 
 // Server to client
 interface LSPEventMap {
     "textDocument/publishDiagnostics": LSP.PublishDiagnosticsParams;
+    "client/registerCapability": LSP.RegistrationParams
 }
 
 type Notification = {
@@ -255,12 +257,16 @@ export class LanguageServerClient {
             this.timeout * 3,
         );
         this.capabilities = capabilities;
-        this.notify("initialized", {});
+        await this.notify("initialized", {});
         this.ready = true;
     }
 
     public close() {
         this.client.close();
+    }
+
+    public textDocumentDidClose(params: LSP.DidCloseTextDocumentParams) {
+        return this.notify("textDocument/didClose", params);
     }
 
     public textDocumentDidOpen(params: LSP.DidOpenTextDocumentParams) {
@@ -383,14 +389,47 @@ export class LanguageServerPlugin implements PluginValue {
         });
     }
 
-    public update({ docChanged, startState: { doc }, changes }: ViewUpdate) {
+    public update({ docChanged, state, startState: { doc }, changes }: ViewUpdate) {
+        const newUri = state.facet(documentUri)
+        const newLangId = state.facet(languageId);
+
+        console.log({ newUri, newLangId, prevUri: this.documentUri, prevLangId: this.languageId })
+
+        // if (newUri !== this.documentUri || newLangId !== this.languageId) {
+        //     this.documentUri && this.sendDidClose()
+        //     this.documentUri = newUri
+        //     this.languageId = newLangId
+        //     this.documentVersion = 0
+        //     this.sendDidOpen()
+        // }
+
         if (!docChanged) {
             return;
         }
         this.sendChanges(eventsFromChangeSet(doc, changes));
     }
 
+    public async sendDidClose() {
+        return this.client.textDocumentDidClose({
+            textDocument: {
+                uri: this.documentUri
+            }
+        })
+    }
+
+    public async sendDidOpen() {
+        return this.client.textDocumentDidOpen({
+            textDocument: {
+                uri: String(this.documentUri),
+                languageId: String(this.languageId),
+                text: this.view.state.doc.toString(),
+                version: this.documentVersion
+            }
+        })
+    }
+
     public destroy() {
+        console.log('would destroy lsp plugin', this)
         this.client.detachPlugin(this);
     }
 
@@ -622,6 +661,9 @@ export class LanguageServerPlugin implements PluginValue {
             switch (notification.method) {
                 case "textDocument/publishDiagnostics":
                     this.processDiagnostics(notification.params);
+                    break;
+                case "client/registerCapability":
+                    break;
             }
         } catch (error) {
             logger(error);
@@ -1494,7 +1536,7 @@ export function languageServerWithClient(options: LanguageServerOptions) {
                 options.onGoToDefinition,
             );
             return plugin;
-        }),
+        },),
     ];
 
     // Add shortcuts
