@@ -15,6 +15,7 @@ import {
     languageServerWithClient,
 } from "../plugin";
 import { offsetToPos, posToOffset } from "../utils";
+import { documentUri, languageId } from "../config";
 
 // Mock WebSocket transport
 vi.mock("@open-rpc/client-js", () => ({
@@ -54,6 +55,7 @@ const createMockClient = (
         textDocumentRename: vi.fn().mockResolvedValue(null),
         textDocumentPrepareRename: vi.fn().mockResolvedValue(null),
         textDocumentSignatureHelp: vi.fn().mockResolvedValue(null),
+        textDocumentDidClose: vi.fn().mockResolvedValue(null),
         ...init,
     };
     return mockClient as LanguageServerClient;
@@ -364,10 +366,9 @@ console.log(a)`;
             parent: document.body,
             state: EditorState.create({
                 doc,
-                extensions,
+                extensions: extensions.concat([documentUri.of('file:///test/file.ts'), languageId.of('typescript')]),
             }),
         });
-        view.dispatch();
 
         const viewPluginExt = extensions.find(
             (ext) => ext && typeof ext === "object" && "create" in ext,

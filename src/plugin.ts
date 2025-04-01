@@ -397,8 +397,8 @@ export class LanguageServerPlugin implements PluginValue {
 
         // if (newUri !== this.documentUri || newLangId !== this.languageId) {
         //     this.documentUri && this.sendDidClose()
-        //     this.documentUri = newUri
-        //     this.languageId = newLangId
+        //     this.documentUri = newUri || this.documentUri
+        //     this.languageId = newLangId || this.languageId
         //     this.documentVersion = 0
         //     this.sendDidOpen()
         // }
