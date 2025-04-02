@@ -389,20 +389,7 @@ export class LanguageServerPlugin implements PluginValue {
         });
     }
 
-    public update({ docChanged, state, startState: { doc }, changes }: ViewUpdate) {
-        const newUri = state.facet(documentUri)
-        const newLangId = state.facet(languageId);
-
-        console.log({ newUri, newLangId, prevUri: this.documentUri, prevLangId: this.languageId })
-
-        // if (newUri !== this.documentUri || newLangId !== this.languageId) {
-        //     this.documentUri && this.sendDidClose()
-        //     this.documentUri = newUri || this.documentUri
-        //     this.languageId = newLangId || this.languageId
-        //     this.documentVersion = 0
-        //     this.sendDidOpen()
-        // }
-
+    public update({ docChanged, startState: { doc }, changes }: ViewUpdate) {
         if (!docChanged) {
             return;
         }
@@ -429,7 +416,7 @@ export class LanguageServerPlugin implements PluginValue {
     }
 
     public destroy() {
-        console.log('would destroy lsp plugin', this)
+        this.documentUri && this.sendDidClose()
         this.client.detachPlugin(this);
     }
 
